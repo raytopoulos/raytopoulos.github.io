@@ -1,0 +1,28 @@
+.titlebox{
+	width:auto;
+overflow: hidden;
+text-align: center;
+margin-left: 15%;
+margin-right: 15%;
+margin-top: 10%;
+margin-bottom: 5%;
+ border-radius: 25px;
+ background-color: #333;
+color: #f2f2f2;
+}
+
+.textbox {
+  width: 70%;
+  margin: 0 auto;
+  margin-bottom: 25px;
+  background-color: white;
+  left: 15%;
+  position: static;
+  align: center;
+  padding-left: 19px;
+  padding-right: 19px;
+  padding-top: 38px;
+  padding-bottom: 57px;
+  border-radius: 25px;
+  border: 2px solid white;
+}
