@@ -8,6 +8,7 @@
 	margin-left:15%;
 	margin-right: 15%;
 	margin-top:10%;
+	margin-bottom:10%
 }
 
 .text-box {
@@ -24,8 +25,12 @@
 
 @media only screen and (max-width: 1000px) {
 	.title-box{
-		margin-left:5px;
-		margin-right:5px;
+		margin-left:0px;
+		margin-right:0px;
 		margin-top:19%;
+	}
+	.text-box{
+		padding-left: 9px;
+    padding-right: 9px;
 	}
 }
