@@ -1,0 +1,37 @@
+.prev-box{
+	background-color:#333;
+	color:#a8a8a8;
+	border-radius: 25px;
+	overflow: hidden;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
+	padding-top:9px;
+	padding-bottom:19px;
+	padding-left:9px;
+	padding-right:9px;
+	margin-left:15%;
+	margin-right: 15%;
+	margin-top:0px;
+	margin-bottom:25px;
+}
+
+.prev-box a{
+	color:#f2f2f2;
+	text-align: center;
+}
+
+.prev-box #date{
+	color:#d8d8d8;
+	text-align: center;
+	font-size:16px;
+	margin-bottom:9px;
+}
+
+@media only screen and (max-width: 1000px) {
+	
+	.prev-box{
+		margin-left:5px;
+	margin-right:5px;
+	}
+	
+}

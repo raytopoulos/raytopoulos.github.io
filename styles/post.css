@@ -7,8 +7,10 @@
 	overflow: hidden;
 	margin-left:15%;
 	margin-right: 15%;
-	margin-top:10%;
-	margin-bottom:10%
+	margin-top:100px;
+	margin-bottom:10%;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
 }
 
 .text-box {
@@ -21,16 +23,23 @@
 	overflow-wrap: break-word;
 	word-wrap: break-word;
 	color:black;
+	min-height:65vh;
+}
+
+.title-box #date{
+	color:#d8d8d8;
+	text-align: center;
+	font-size:16px;
+	margin-bottom:9px;
 }
 
 @media only screen and (max-width: 1000px) {
 	.title-box{
 		margin-left:0px;
 		margin-right:0px;
-		margin-top:19%;
 	}
 	.text-box{
 		padding-left: 9px;
-    padding-right: 9px;
+		padding-right: 9px;
 	}
 }
