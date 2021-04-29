@@ -6,6 +6,7 @@
   <link rel="stylesheet" href="../styles/page.css">
   <link rel="stylesheet" href="../styles/post.css">
   <link rel="stylesheet" href="../styles/preview.css">
+  <link rel="stylesheet" href="../styles/cookies.css">
   <meta name="viewport" content="width=device-width, initial-scale=1">
 </head>
 
@@ -13,27 +14,26 @@
 <div class="page">
 <div class="nav"><img src="../favicon.ico" alt="favicon" width="38" height="38"><a href="#posts">posts</a><a href="#projects">projects</a><a href="#github">github</a><a href="#about">about</a></div>
 
-<div id="frame">
-
-<iframe width="560" height="315" src="https://www.youtube-nocookie.com/embed/uvcutJTCQzw" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
-
 </div>
 
+<div id="cookies" class="cookie-overlay">
+  <div class="cookie-box">
+    <p>cookie policy...</p>
+	<input type="checkbox" id="embeds" name="thirdPartyCookies">
+  <label for="vehicle1"> Allow third party embedded content.</label><br>
+  <input type="checkbox" id="analytics" name="analytics">
+  <label for="vehicle2"> Allow google analytics</label><br><br>
+  <div style="text-align:center;">
+  <button id="acceptSelBtn">accept selected</button>
+  <br>
+  <button class="blue-btn" id="acceptAllBtn">accept all</button>
+  </div>
+  </div>
 </div>
 
-<footer><button id="cookie-fucker">delete</button><a href=../privacy-policy.html>Privacy policy</a></footer>
+<footer><button id="cookie-fucker">delete</button><button id="myBtn">Open popup</button><a href=../privacy-policy.html>Privacy policy</a></footer>
 
-<script>
-var f = document.getElementById("frame");
-f.style.display = "none";
-window.localStorage.clear();
-var cf = document.getElementById("cookie-fucker");
-
-cf.onclick = function() {
-//var aValue = storage.getItem('yt-remote-device-id');
-alert("hello");
-}
-</script>
+<script src="../scripts/consent.js"></script>
 
 </body>
 
