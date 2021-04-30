@@ -1,0 +1,22 @@
+.embedded-container { 
+	position: relative; 
+	padding-bottom: 56.25%; 
+	padding-top: 30px; 
+	height: 0;
+	margin-left:5%;
+	margin-right:5%;
+	margin-top:19px;
+	margin-bottom:19px;
+	overflow-wrap: break-word;
+	word-wrap: break-word;
+	background-color:#f0f0f0;
+	display:block;
+	}
+
+.embedded-container iframe,img{ 
+	position: absolute; 
+	top: 0; 
+	left: 0; 
+	width: 100%; 
+	height: 100%; 
+}

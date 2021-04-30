@@ -6,14 +6,16 @@ var btn = document.getElementById("myBtn");
 var allBtn = document.getElementById("acceptAllBtn");
 var selBtn = document.getElementById("acceptSelBtn");
 
-if ((localStorage.getItem("consent")) == "true") {
-  cookies.style.display = "none";
+if ((localStorage.getItem("consent")) === null) {
+  cookies.style.display = "block";
 }
 if(localStorage.getItem("embeds")=="false"||localStorage.getItem("embeds")===null){
-var list = document.getElementsByTagName("iframe");
-for (i = 0; i < list.length; i++) {
-list[i].src = "_";
-list[i].style.display = "none";
+	var divList = document.getElementsByClassName("embedded-container");
+for(i=0;i<divList.length;i++){
+	var source = divList[i].querySelectorAll('iframe,img')[0].src;
+	//divList[i].querySelectorAll('iframe,img')[0]..width = 1080;
+	//divList[i].querySelectorAll('iframe,img')[0].height = 1920;
+	//divList[i].innerHTML = "<div style\"position: absolute;top: 0;width: 100%;height: 100%;display: flex;align-items: center;justify-content: center;\">Uh oh a problem occured you need to allow all cookies otherwise no content... 🙂<br><a href=\""+source+"\" target=\"_blank\">"+source+"</a></div>";
 }
 }
 
