@@ -36,11 +36,15 @@ while(divList.length!=0){
 		}
 	}
 }
-//var html = document.getElementsByTagName("head")[0].innerHTML;
-var str = "<script async src=\"https://www.googletagmanager.com/gtag/js?id=UA-166964258-2\"></script><script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'UA-166964258-2');</script>";
-//document.getElementById('head').insertAdjacentHTML( 'afterbegin', str );
 
-document.write(str);
+var scr1 = document.createElement("script");
+var scr2 = document.createElement("script");
+scr1.src = "https://www.googletagmanager.com/gtag/js?id=UA-166964258-2";
+scr1.async = true;
+scr2.innerHTML = "window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'UA-166964258-2');";
+var scrFirst = document.getElementsByTagName('script')[0];
+scrFirst.parentNode.insertBefore(scr1, scrFirst);
+scrFirst.parentNode.insertBefore(scr2, scrFirst);
 
 btn.onclick = function() {
   cookies.style.display = "block";
