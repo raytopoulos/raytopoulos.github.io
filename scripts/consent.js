@@ -13,10 +13,15 @@ if(localStorage.getItem("embeds")=="false"||localStorage.getItem("embeds")===nul
 	var divList = document.getElementsByClassName("embedded-container");
 for(i=0;i<divList.length;i++){
 	var source = divList[i].querySelectorAll('iframe,img')[0].src;
-	//divList[i].querySelectorAll('iframe,img')[0]..width = 1080;
-	//divList[i].querySelectorAll('iframe,img')[0].height = 1920;
-	//divList[i].innerHTML = "<div style\"position: absolute;top: 0;width: 100%;height: 100%;display: flex;align-items: center;justify-content: center;\">Uh oh a problem occured you need to allow all cookies otherwise no content... 🙂<br><a href=\""+source+"\" target=\"_blank\">"+source+"</a></div>";
+	//var source = "test";
+	divList[i].innerHTML = "😢Oh no you have disabled third party embedded content😢<br>don't worry here's the link:<br><a href=\""+source+"\" target=\"_blank\">"+source+"</a>";
 }
+
+while(divList.length!=0){
+	//alert(divList.length);
+	divList[0].setAttribute("class", "no-embed-4u");
+}
+
 }
 
 btn.onclick = function() {
