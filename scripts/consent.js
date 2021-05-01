@@ -9,20 +9,38 @@ var selBtn = document.getElementById("acceptSelBtn");
 if ((localStorage.getItem("consent")) === null) {
   cookies.style.display = "block";
 }
+var divList = document.getElementsByClassName("embedded-container");
+if(divList!=null){
+	//alert("aaaaaaaa");
+	
+}
 if(localStorage.getItem("embeds")=="false"||localStorage.getItem("embeds")===null){
-	var divList = document.getElementsByClassName("embedded-container");
 for(i=0;i<divList.length;i++){
-	var source = divList[i].querySelectorAll('iframe,img')[0].src;
-	//var source = "test";
-	divList[i].innerHTML = "😢Oh no you have disabled third party embedded content😢<br>don't worry here's the link:<br><a href=\""+source+"\" target=\"_blank\">"+source+"</a>";
+	var source = divList[i].getElementsByTagName("a")[0].href;
+	divList[i].getElementsByTagName("a")[0].innerHTML=source;
+	divList[i].innerHTML = "😢Oh no you have disabled third party embedded content😢<br>don't worry here's the link:<br>"+divList[i].innerHTML;
 }
 
 while(divList.length!=0){
 	//alert(divList.length);
 	divList[0].setAttribute("class", "no-embed-4u");
 }
-
+}else{
+	for(i=0;i<divList.length;i++){
+		var source = divList[i].getElementsByTagName("a")[0].href;
+		var site = source.charAt(12);
+		if(site=="g"){
+			divList[i].innerHTML = "<img loading=\"lazy\" src=\""+source+"\">"
+		}else if(site=="y"){
+			divList[i].innerHTML = "<iframe src=\""+source+"\" title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" allowfullscreen></iframe>"
+		}
+	}
 }
+//var html = document.getElementsByTagName("head")[0].innerHTML;
+var str = "<script async src=\"https://www.googletagmanager.com/gtag/js?id=UA-166964258-2\"></script><script>window.dataLayer = window.dataLayer || [];function gtag(){dataLayer.push(arguments);}gtag('js', new Date());gtag('config', 'UA-166964258-2');</script>";
+//document.getElementById('head').insertAdjacentHTML( 'afterbegin', str );
+
+document.write(str);
 
 btn.onclick = function() {
   cookies.style.display = "block";
