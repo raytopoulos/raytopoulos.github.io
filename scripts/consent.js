@@ -16,6 +16,7 @@ var divList = document.getElementsByClassName("embedded-container");
 if (localStorage.getItem("embeds") == "false") {
     for (i = 0; i < divList.length; i++) {
         var source = divList[i].getElementsByTagName("a")[0].href;
+		divList[i].getElementsByTagName("a")[0].target = "_blank";
         divList[i].getElementsByTagName("a")[0].innerHTML = source;
         divList[i].innerHTML = "😢Oh no you have disabled third party embedded content.😢<br>You can either enable embeds by clicking the \"modify consent\" button at the bottom of the page or you can click the link directly:<br>" + divList[i].innerHTML;
     }
