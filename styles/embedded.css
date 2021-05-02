@@ -1,10 +1,7 @@
 .embedded-container { 
 	position: relative; 
-	padding-bottom: 56.25%; 
 	padding-top: 30px; 
 	height: 0;
-	margin-left:5%;
-	margin-right:5%;
 	margin-top:19px;
 	margin-bottom:19px;
 	overflow-wrap: break-word;
@@ -13,22 +10,21 @@
 
 .embedded-container iframe,.embedded-container img{ 
 	position: absolute; 
-	top: 0; 
-	left: 0; 
-	width: 100%; 
-	height: 100%; 
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
 }
 
 .no-embed-4u{
-	position: relative; 
-	padding-bottom: 28.5%; 
-	padding-top: 28.5%; 
-	margin-left:5%;
-	margin-right:5%;
+	max-height:50vh;
+	padding-left:19px;
+	padding-right:19px;
 	margin-top:19px;
 	margin-bottom:19px;
 	overflow-wrap: break-word;
 	word-wrap: break-word;
 	background-color:#f0f0f0;
 	text-align: center;
+	overflow:hidden;
 }
