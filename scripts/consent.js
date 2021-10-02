@@ -36,11 +36,11 @@ function manageThirdPartyEmbeds() {
         for (i = 0; i < divList.length; i++) {
             var source = divList[i].getElementsByTagName("a")[0].href;
             var site = source.charAt(12);
-            if (site == "g") {
+            if (site == "y") {
+				divList[i].innerHTML = "<iframe src=\"" + source + "\" title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" allowfullscreen></iframe>"
+            } else {
                 divList[i].innerHTML = "<img loading=\"lazy\" src=\"" + source + "\">"
-            } else if (site == "y") {
-                divList[i].innerHTML = "<iframe src=\"" + source + "\" title=\"YouTube video player\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture\" allowfullscreen></iframe>"
-            }
+			}
         }
     }
 }
