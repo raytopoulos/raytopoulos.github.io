@@ -1,21 +1,207 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
-  <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
-  <link rel="stylesheet" href="styles/page.css">
-  <link rel="stylesheet" href="styles/post.css">
+  <link rel="icon" href="favicon.ico" type="image/x-icon"/>
+  <link rel="shortcut icon" href="cutout.png" type="image/x-icon"/>
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-</head>
+  <title>George Raftopoulos | Portfolio</title>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;500;700&display=swap" rel="stylesheet">
+  <style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Roboto', sans-serif;
+  background: #F5F7FA;
+  color: #333333;
+}
+header {
+  background: #2C3E50;
+  color: #ffffff;
+  padding: 1rem 2rem;
+  text-align: center;
+}
+nav ul {
+  list-style: none;
+  display: flex;
+  justify-content: center;
+  margin-top: 0.5rem;
+}
+nav ul li {
+  margin: 0 1rem;
+}
+nav ul li a {
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.3s ease, border-bottom 0.3s ease;
+  padding: 0.2rem 0;
+}
+nav ul li a:hover {
+  border-bottom: 2px solid #b4dbe7;
+}
 
+.project img {
+  display:flex;
+  justify-self: center;
+  border-radius: 6px;
+}
+.hero {
+  padding: 4rem 2rem;
+  text-align: center;
+  background: #ffffff;
+  color: #2C3E50;
+}
+.hero h1 {
+  font-size: 3rem;
+  margin-bottom: 1rem;
+}
+.hero p {
+  font-size: 1.2rem;
+}
+
+.section {
+  padding: 3rem 2rem;
+  max-width: 1000px;
+  margin: 0 auto;
+}
+.section h2 {
+  font-size: 2rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+  color: #2C3E50;
+}
+
+.projects {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+
+.project {
+  background: #ffffff;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+.project:hover {
+  transform: translateY(-5px) scale(1.02);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+}
+.project img {
+  width: 100%;
+  border-radius: 6px;
+  transition: transform 0.3s ease;
+}
+.project:hover img {
+  transform: scale(1.03);
+}
+.project h3 {
+  margin: 0.8rem 0 0.5rem;
+  color: #2C3E50;
+}
+
+.contact {
+  text-align: center;
+}
+.contact p {
+  margin-bottom: 0.5rem;
+}
+
+footer {
+  background: #2C3E50;
+  color: #ddd;
+  text-align: center;
+  padding: 1rem 0;
+  margin-top: 2rem;
+}
+
+a {
+  color: #3498DB;
+  transition: color 0.3s ease;
+}
+a:hover {
+  color: #b4dbe7;
+}
+
+@media (max-width: 600px) {
+  .hero h1 { font-size: 2rem; }
+  nav ul { flex-direction: column; }
+  nav ul li { margin: 0.5rem 0; }
+}
+
+  </style>
+</head>
 <body>
-<div class="nav"><nav><img src="favicon.ico" alt="favicon" width="38" height="38"><a href="#posts">posts</a><a href="#projects">projects</a><a href="#github">github</a><a href="#about">about</a></nav></div>
-<div class="title-box">
-<h1 align = "center">Hi i am George.</h1>
-<div class="text-box">
-<A HREF = "posts/blank-page.html">other page</A>
-</div>
-</div>
+
+<header>
+  <img src="cutout.png" style="width: 83px;height: 115px;">
+  <h1>George Raftopoulos</h1>
+  <nav>
+    <ul>
+      <li><a href="#about">About</a></li>
+      <li><a href="#projects">Projects</a></li>
+      <li><a href="#footer">Contact</a></li>
+    </ul>
+  </nav>
+</header>
+
+<section class="hero">
+  <h1>Welcome to My Portfolio</h1>
+  <p>Showcasing my work and passion for all things tech.</p>
+</section>
+
+<section id="about" class="section">
+  <h2>About Me</h2>
+  <p style="text-align: center;">I’m a passionate coder with a love for problem-solving and creative tech projects. I work with a variety of languages, including C/C++, Python, Java, and web technologies like HTML, CSS, and JavaScript. Beyond coding, I enjoy dabbling in basic audio and video editing, adding a creative touch to my technical side. When I'm not building or debugging something, you’ll probably find me gaming, exploring the world of local AI tools, or experimenting with new ideas just for the fun of it. I'm always eager to learn, tinker, and push the limits of what I can create.</p>
+</section>
+
+<section id="projects" class="section">
+  <h2>My Projects</h2>
+  <div id="projects-container" class="projects">
+    <!-- Projects will be injected here via JavaScript -->
+  </div>
+</section>
+
+<footer id="footer">
+  <h2>Contact Me</h2>
+  <p>Email: contact@raftopoulos.com</p>
+  <p>GitHub: <a href="https://github.com/raytopoulos" target="_blank">raytopoulos</a></p>
+  <p style="margin-top: 1rem; color: #aaa;">&copy; 2025 George Raftopoulos. All rights reserved.</p>
+</footer>
+<script>
+  // Fetch projects from the JSON file and render them
+  fetch('/projects.json')
+    .then(response => response.json())
+    .then(data => {
+      const projectsContainer = document.getElementById('projects-container');
+
+      data.forEach(project => {
+        const projectLink = document.createElement('a');
+        projectLink.href = project.link;
+        projectLink.target = "_blank";  // Open in new tab
+        projectLink.style.textDecoration = "none";
+        projectLink.style.color = "inherit";
+
+        const projectCard = document.createElement('div');
+        projectCard.classList.add('project');
+
+        projectCard.innerHTML = `
+          <img src="${project.image}" alt="${project.title}" style="width:32px;height:32px;">
+          <h3>${project.title}</h3>
+          <p>${project.description}</p>
+        `;
+
+        projectLink.appendChild(projectCard);
+        projectsContainer.appendChild(projectLink);
+      });
+    })
+    .catch(error => {
+      console.error('Error fetching projects:', error);
+      const projectsContainer = document.getElementById('projects-container');
+      projectsContainer.innerHTML = "<p>Failed to load projects. Please try again later.</p>";
+    });
+</script>
 
 </body>
 </html>

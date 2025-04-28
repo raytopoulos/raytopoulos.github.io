@@ -1,0 +1,21 @@
+[
+    {
+      "title": "Portfolio Website",
+      "image": "cutout.png",
+      "description": "A modern personal portfolio website built with HTML, CSS, and JavaScript.",
+      "link": "http://localhost/iek/proodos/"
+    },
+    {
+      "title": "Task Manager App",
+      "image": "https://github.com/favicon.ico",
+      "description": "A task management application using React and Firebase for real-time updates.",
+      "link": "https://example.com/taskmanager"
+    },
+    {
+      "title": "Treasure hunter",
+      "image": "https://gitlab.com/assets/favicon-72a2cad5025aa931d6ea56c3201d1f18e68a8cd39788c7c80d5b2b82aa5143ef.png",
+      "description": "A group project i participated in. It's a treasure hunter game for android utilising the google maps api.",
+      "link": "https://gitlab.com/aneziou/treasure_hunter"
+    }
+  ]
+  
