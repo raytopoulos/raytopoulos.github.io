@@ -18,6 +18,8 @@
     weekWrapper: document.querySelector('.week-table-wrapper'),
     weekTable: document.querySelector('.week-table'),
     colorPresets: document.getElementById('colorPresets'),
+    menuBtn: document.getElementById('menuBtn'),
+    closeSidebarBtn: document.getElementById('closeSidebar'),
   };
 
   const CONST = Object.freeze({
@@ -418,6 +420,19 @@
       instances.forEach(el=>{ Canvas.placeWithin(el, parseFloat(el.style.left)||0, parseFloat(el.style.top)||0); });
       Week.layoutAll();
     });
+
+    // Mobile sidebar toggle
+    (function(){
+      const sidebar = els.sidebar;
+      const btn = els.menuBtn;
+      const closeBtn = els.closeSidebarBtn;
+      const setExpanded=(open)=>{ if(btn) btn.setAttribute('aria-expanded', open? 'true':'false'); };
+      const close=()=>{ sidebar.classList.remove('open'); setExpanded(false); };
+      if(btn){ btn.addEventListener('click', ()=>{ const open=sidebar.classList.toggle('open'); setExpanded(open); }); }
+      if(closeBtn){ closeBtn.addEventListener('click', close); }
+      window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
+      window.addEventListener('resize', ()=>{ if(window.innerWidth>768) close(); });
+    })();
   }
 
   init();

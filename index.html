@@ -8,10 +8,11 @@
 </head>
 <body>
   <div class="app" role="application" aria-label="Bubble canvas app">
-    <aside class="sidebar" aria-label="Bubble library">
+    <aside id="sidebar" class="sidebar" aria-label="Bubble library">
       <header>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10v10H7z" stroke="#38bdf8" stroke-width="1.5"/><path d="M12 4v16M4 12h16" stroke="#22d3ee" stroke-width="1.5"/></svg>
         Bubble Library
+        <button id="closeSidebar" class="close-btn" aria-label="Close library" title="Close">&times;</button>
       </header>
       <div class="hint">Drag a bubble onto the canvas to create an instance.</div>
 
@@ -22,6 +23,7 @@
 
     <main>
       <div class="toolbar">
+        <button id="menuBtn" class="menu-btn" aria-controls="sidebar" aria-expanded="false" aria-label="Open bubble library" title="Open library">&#9776;</button>
         <div>
           💡 Tip: Hold and drag bubbles on the canvas to reposition them. Create new kinds of bubbles with the + button.
         </div>
