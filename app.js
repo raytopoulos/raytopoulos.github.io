@@ -310,7 +310,16 @@
     },
     selectedColor(){ const sel=els.colorPresets? els.colorPresets.querySelector('.swatch.selected'):null; return sel? sel.dataset.color : (PRESETS[0]||'#22d3ee'); },
     wire(){
-      els.addBtn.addEventListener('click', Modal.open);
+      // Open the modal; on mobile also close the sidebar for clarity
+      els.addBtn.addEventListener('click', ()=>{
+        if(window.innerWidth <= 768){
+          els.sidebar.classList.remove('open');
+          if(els.menuBtn) els.menuBtn.setAttribute('aria-expanded','false');
+          const backdrop=document.getElementById('sidebarBackdrop');
+          if(backdrop) backdrop.hidden = true;
+        }
+        Modal.open();
+      });
       els.cancelBtn.addEventListener('click', Modal.close);
       els.modal.addEventListener('click',(e)=>{ if(e.target===els.modal) Modal.close(); });
       window.addEventListener('keydown',(e)=>{ if(!els.modal.hidden && e.key==='Escape') Modal.close(); });
@@ -426,12 +435,16 @@
       const sidebar = els.sidebar;
       const btn = els.menuBtn;
       const closeBtn = els.closeSidebarBtn;
+      const backdrop = document.getElementById('sidebarBackdrop');
       const setExpanded=(open)=>{ if(btn) btn.setAttribute('aria-expanded', open? 'true':'false'); };
-      const close=()=>{ sidebar.classList.remove('open'); setExpanded(false); };
-      if(btn){ btn.addEventListener('click', ()=>{ const open=sidebar.classList.toggle('open'); setExpanded(open); }); }
+      const hideBackdrop = ()=>{ if(backdrop) backdrop.hidden = true; };
+      const maybeShowBackdrop = ()=>{ if(backdrop) backdrop.hidden = !(window.innerWidth <= 768 && sidebar.classList.contains('open')); };
+      const close=()=>{ sidebar.classList.remove('open'); setExpanded(false); hideBackdrop(); };
+      if(btn){ btn.addEventListener('click', ()=>{ const open=sidebar.classList.toggle('open'); setExpanded(open); maybeShowBackdrop(); }); }
       if(closeBtn){ closeBtn.addEventListener('click', close); }
+      if(backdrop){ backdrop.addEventListener('click', close); }
       window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
-      window.addEventListener('resize', ()=>{ if(window.innerWidth>768) close(); });
+      window.addEventListener('resize', ()=>{ if(window.innerWidth>768) close(); else maybeShowBackdrop(); });
     })();
   }
 

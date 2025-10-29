@@ -88,6 +88,11 @@ input[type="text"]:focus{ border-color:var(--accent); box-shadow:0 0 0 4px var(-
 .bubbles-list::-webkit-scrollbar{ width:10px; }
 .bubbles-list::-webkit-scrollbar-thumb{ background:var(--border); border-radius:999px; }
 
+/* Sidebar backdrop (mobile) */
+.sidebar-backdrop{ position:fixed; inset:0; background:rgba(3,7,18,.55); backdrop-filter:blur(2px); z-index:110; }
+.sidebar-backdrop[hidden]{ display:none; }
+@media (min-width: 769px){ .sidebar-backdrop{ display:none !important; } }
+
 /* Utility buttons */
 .menu-btn{ display:none; }
 .sidebar header .close-btn{ display:none; }
@@ -104,4 +109,21 @@ input[type="text"]:focus{ border-color:var(--accent); box-shadow:0 0 0 4px var(-
 
   .canvas{ margin:8px; }
   .week-table-wrapper{ min-width:auto; }
+
+  /* Stack days vertically on mobile */
+  .week-table{ display:block; height:100%; }
+  .week-table thead{ display:none; }
+  .week-table tbody, .week-table tr{ display:block; }
+  .week-table td{ display:block; width:100%; border:0; border-top:2px solid var(--border); padding:12px 0; }
+  .week-table tr:last-child td{ border-bottom:2px solid var(--border); }
+  .week-table tbody td::before{
+    display:block; content:""; font-size:12px; color:var(--muted); letter-spacing:.08em; text-transform:uppercase; margin-bottom:6px;
+  }
+  .week-table tbody td:nth-child(1)::before{ content:"Mon"; }
+  .week-table tbody td:nth-child(2)::before{ content:"Tue"; }
+  .week-table tbody td:nth-child(3)::before{ content:"Wed"; }
+  .week-table tbody td:nth-child(4)::before{ content:"Thu"; }
+  .week-table tbody td:nth-child(5)::before{ content:"Fri"; }
+  .week-table tbody td:nth-child(6)::before{ content:"Sat"; }
+  .week-table tbody td:nth-child(7)::before{ content:"Sun"; }
 }
