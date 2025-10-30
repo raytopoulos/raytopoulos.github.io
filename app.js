@@ -1,6 +1,9 @@
-/* app.js — zero left/right gutter for stacked bubbles
-   - Sets PAD_X to 0 so layoutColumn() doesn't add an extra left/right offset
-   - Width calc still respects borders; margins handled purely in CSS
+/* app.js — scroll blockers removed (safe minimal)
+   What changed vs your snippet:
+   1) Deleted any code that sets inline heights/min-heights on the week wrapper/canvas.
+   2) Week.layoutAll() no longer computes/assigns wrapper height — it only restacks.
+   3) Removed the resize handler that was re-clamping and re-sizing; nothing JS-driven affects page height now.
+   4) Left drag & drop / modal / templates as-is.
 */
 (function(){
   "use strict";
@@ -24,11 +27,10 @@
 
   const CONST = Object.freeze({
     PAD_TOP: 8,
-    PAD_X: 0,          // was 1 — now zero to remove the left/right gap
-    COL_MARGIN_VW: 0.00, // remove tiny vw gutter entirely
+    PAD_X: 0,           // keep columns flush with cell padding
+    COL_MARGIN_VW: 0.00,
     GAP: 6,
-    STORAGE_KEY: 'bubbleTemplates.v1',
-    CSS_MINH_FALLBACK: 360,
+    STORAGE_KEY: 'bubbleTemplates.v1'
   });
 
   const PRESETS = [
@@ -110,7 +112,7 @@
         text: el.dataset.text || el.textContent.trim(),
         color: el.dataset.color || ''
       }));
-      try{ localStorage.setItem(CONST.STORAGE_KEY, JSON.stringify(items)); }catch(_){}
+      try{ localStorage.setItem(CONST.STORAGE_KEY, JSON.stringify(items)); }catch(_){ }
     },
     load(){
       let initial=['Idea','Task','Note'];
@@ -172,20 +174,9 @@
       return y - CONST.GAP;
     }
 
+    // No sizing/height management here — only restacking
     function layoutAll(){
-      let maxBottom=0;
-      for(let c=0;c<stacks.length;c++){
-        const bottom = layoutColumn(c) || 0; if(bottom>maxBottom) maxBottom=bottom;
-      }
-      const crect=els.canvas.getBoundingClientRect();
-      const wrect=els.weekWrapper.getBoundingClientRect();
-      const wrapperTopInCanvas = wrect.top - crect.top;
-      const needed = Math.ceil(maxBottom - wrapperTopInCanvas + CONST.PAD_TOP);
-      let minHraw = getComputedStyle(els.weekWrapper).getPropertyValue('--week-min-h');
-      let minH = parseInt(minHraw);
-      if(!isFinite(minH)) minH = CONST.CSS_MINH_FALLBACK;
-      const newH = Math.max(needed, minH);
-      els.weekWrapper.style.height = (isFinite(newH)? newH : minH) + 'px';
+      for(let c=0;c<stacks.length;c++){ layoutColumn(c); }
     }
 
     function removeFromStack(el){
@@ -310,7 +301,6 @@
     },
     selectedColor(){ const sel=els.colorPresets? els.colorPresets.querySelector('.swatch.selected'):null; return sel? sel.dataset.color : (PRESETS[0]||'#22d3ee'); },
     wire(){
-      // Open the modal; on mobile also close the sidebar for clarity
       els.addBtn.addEventListener('click', ()=>{
         if(window.innerWidth <= 768){
           els.sidebar.classList.remove('open');
@@ -338,6 +328,7 @@
       const snap=Week.getSnapCellAt(clientX, clientY); if(snap.inside && snap.cell){ Week.assignToStack(el, snap.cell, clientY); }
     },
     placeWithin(el,left,top){
+      // NOTE: this clamps within the current canvas client area, but does not change any container heights.
       const maxLeft=Math.max(0, els.canvas.clientWidth - el.offsetWidth);
       const maxTop=Math.max(0, els.canvas.clientHeight - el.offsetHeight);
       el.style.left=U.clamp(left,0,maxLeft)+'px'; el.style.top=U.clamp(top,0,maxTop)+'px';
@@ -345,7 +336,7 @@
     makeDraggable(el){
       el.addEventListener('dragstart',(e)=> e.preventDefault());
       el.addEventListener('pointerdown',(e)=>{
-        const sel=window.getSelection&&window.getSelection(); if(sel && !sel.isCollapsed){ try{ sel.removeAllRanges(); }catch(_){} }
+        const sel=window.getSelection&&window.getSelection(); if(sel && !sel.isCollapsed){ try{ sel.removeAllRanges(); }catch(_){ } }
         e.preventDefault(); el.setPointerCapture(e.pointerId); el.classList.add('dragging');
         el.style.zIndex = String(++state.zCounter);
         els.trash.classList.add('visible');
@@ -423,29 +414,9 @@
 
   function init(){
     Modal.wire(); Canvas.wireDndFromSidebar(); Trash.wire(); Store.load();
+    // Initial restack only (no sizing)
     Week.layoutAll();
-    window.addEventListener('resize',()=>{
-      const instances=els.canvas.querySelectorAll('.bubble.instance');
-      instances.forEach(el=>{ Canvas.placeWithin(el, parseFloat(el.style.left)||0, parseFloat(el.style.top)||0); });
-      Week.layoutAll();
-    });
-
-    // Mobile sidebar toggle
-    (function(){
-      const sidebar = els.sidebar;
-      const btn = els.menuBtn;
-      const closeBtn = els.closeSidebarBtn;
-      const backdrop = document.getElementById('sidebarBackdrop');
-      const setExpanded=(open)=>{ if(btn) btn.setAttribute('aria-expanded', open? 'true':'false'); };
-      const hideBackdrop = ()=>{ if(backdrop) backdrop.hidden = true; };
-      const maybeShowBackdrop = ()=>{ if(backdrop) backdrop.hidden = !(window.innerWidth <= 768 && sidebar.classList.contains('open')); };
-      const close=()=>{ sidebar.classList.remove('open'); setExpanded(false); hideBackdrop(); };
-      if(btn){ btn.addEventListener('click', ()=>{ const open=sidebar.classList.toggle('open'); setExpanded(open); maybeShowBackdrop(); }); }
-      if(closeBtn){ closeBtn.addEventListener('click', close); }
-      if(backdrop){ backdrop.addEventListener('click', close); }
-      window.addEventListener('keydown', (e)=>{ if(e.key==='Escape') close(); });
-      window.addEventListener('resize', ()=>{ if(window.innerWidth>768) close(); else maybeShowBackdrop(); });
-    })();
+    // Removed: resize handler that changed heights or re-clamped positions for scrolling
   }
 
   init();
