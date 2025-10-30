@@ -99,7 +99,7 @@
   .day-accordion__header .label{ letter-spacing:.08em; text-transform:uppercase; font-size:12px; color:var(--muted); }
   .day-accordion__header .chev{ width:16px; height:16px; flex:0 0 auto; transition:transform .2s ease; opacity:.7; }
   .day-accordion__header[aria-expanded="true"] .chev{ transform:rotate(180deg); }
-  .day-accordion__panel{ overflow:hidden; height:0; }
+  .day-accordion__panel{ overflow:hidden; height:0; transition: height .18s ease; will-change: height; }
   .day-accordion__panel.open{ height:auto; }
 }
 @media (min-width: 769px){
@@ -247,8 +247,12 @@ function makeTemplateEl({ text, color }){
   label.textContent = text; label.draggable = false;
   el.appendChild(label);
 
-  // Click adds to Monday
-  el.addEventListener('click', () => { addBubbleToDay(0, text, color); });
+  // Click adds to Monday (suppressed if a drag just happened)
+  let suppressClick = false;
+  el.addEventListener('click', (e) => {
+    if (suppressClick) { e.preventDefault(); suppressClick = false; return; }
+    addBubbleToDay(0, text, color);
+  });
 
   // Drag data
   el.addEventListener('dragstart', (e) => {
@@ -258,6 +262,141 @@ function makeTemplateEl({ text, color }){
     dt.setData('text/x-bubble-text',  text);
     dt.setData('text/x-bubble-color', color || '');
     dt.setData('text/plain', text);
+  });
+
+  // Pointer-based drag for mobile (touch/pen)
+  el.addEventListener('pointerdown', (e) => {
+    // Let mouse use native HTML5 DnD
+    if (e.pointerType === 'mouse') return;
+    if (e.button !== 0 && e.button !== undefined) return;
+
+    let started = false;
+    let ghost = null;
+    const pid = e.pointerId;
+    const startX = e.clientX, startY = e.clientY;
+    const threshold = 6; // px before starting drag
+    let lastTd = null;
+
+    function ensureGhost(ev){
+      if (started) return;
+      started = true;
+      suppressClick = true; // prevent the subsequent click-to-add
+      try { el.setPointerCapture(pid); } catch(_) {}
+      // Reduce scroll interference while dragging
+      const prevTouchAction = el.style.touchAction;
+      el.__prevTouchAction = prevTouchAction; // stash
+      el.style.touchAction = 'none';
+
+      // Create a floating clone that follows the finger
+      ghost = el.cloneNode(true);
+      ghost.classList.add('drag-ghost');
+      const r = el.getBoundingClientRect();
+      ghost.style.position = 'fixed';
+      ghost.style.left = ev.clientX + 'px';
+      ghost.style.top = ev.clientY + 'px';
+      ghost.style.width = r.width + 'px';
+      ghost.style.transform = 'translate(-50%, -50%)';
+      ghost.style.pointerEvents = 'none';
+      ghost.style.zIndex = '9999';
+      ghost.style.opacity = '0.95';
+      ghost.style.boxShadow = 'var(--shadow, 0 6px 24px rgba(0,0,0,.12))';
+      document.body.appendChild(ghost);
+      // Move pointer capture to the ghost so closing the sidebar doesn't cancel events
+      try { ghost.setPointerCapture(pid); } catch(_) {}
+      try { el.releasePointerCapture(pid); } catch(_) {}
+      // Close the sidebar after capture transfer (next frame to avoid cancel)
+      try {
+        if (window.innerWidth <= 768) {
+          const closeNow = () => {
+            const sidebarEl = document.querySelector('aside.sidebar');
+            const menuBtnEl = document.getElementById('menuBtn');
+            const backdropEl = document.getElementById('sidebarBackdrop');
+            if (sidebarEl) sidebarEl.classList.remove('open');
+            if (menuBtnEl) menuBtnEl.setAttribute('aria-expanded','false');
+            if (backdropEl) backdropEl.hidden = true;
+          };
+          if ('requestAnimationFrame' in window) requestAnimationFrame(closeNow); else setTimeout(closeNow, 0);
+        }
+      } catch(_) {}
+    }
+
+    const onMove = (ev) => {
+      if (ev.pointerId !== pid) return;
+      const dx = ev.clientX - startX, dy = ev.clientY - startY;
+      if (!started && (dx*dx + dy*dy) >= threshold*threshold) {
+        ensureGhost(ev);
+      }
+      if (started && ghost) {
+        ev.preventDefault();
+        ghost.style.left = ev.clientX + 'px';
+        ghost.style.top = ev.clientY + 'px';
+
+        // Find day cell under pointer to optionally auto-open on mobile
+        const target = document.elementFromPoint(ev.clientX, ev.clientY);
+        const td = target ? target.closest('td') : null;
+        if (td && td !== lastTd) {
+          lastTd = td;
+          const hdr = td.querySelector('.day-accordion__header');
+          if (hdr && hdr.getAttribute('aria-expanded') !== 'true') {
+            // Open the day so user can see drop area
+            try { hdr.click(); } catch(_) {}
+          }
+        }
+      }
+    };
+
+    const onUp = (ev) => {
+      if (ev.pointerId !== pid) return;
+      try { ghost && ghost.releasePointerCapture && ghost.releasePointerCapture(pid); } catch(_) {}
+      try { el.releasePointerCapture(pid); } catch(_) {}
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+
+      if (!started) return; // treat as tap; click handler will run
+      ev.preventDefault();
+
+      if (ghost) { ghost.remove(); ghost = null; }
+      // Restore touch-action
+      if (typeof el.__prevTouchAction !== 'undefined') {
+        el.style.touchAction = el.__prevTouchAction || '';
+        try { delete el.__prevTouchAction; } catch(_) {}
+      }
+
+      // Determine drop target day by the td under finger
+      const x = ev.clientX, y = ev.clientY;
+      const target = document.elementFromPoint(x, y);
+      const td = target ? target.closest('td') : null;
+      if (td) {
+        const flows = Array.from(document.querySelectorAll('.day-flow'));
+        const flow = td.querySelector('.day-flow');
+        const idx = flow ? flows.indexOf(flow) : -1;
+        if (idx >= 0) {
+          const bubbleText = el.dataset.text || el.textContent.trim() || 'Item';
+          const bubbleColor = el.dataset.color || '';
+          addBubbleToDay(idx, bubbleText, bubbleColor);
+        }
+      }
+    };
+
+    const onCancel = (ev) => {
+      if (ev.pointerId !== pid) return;
+      try { ghost && ghost.releasePointerCapture && ghost.releasePointerCapture(pid); } catch(_) {}
+      try { el.releasePointerCapture(pid); } catch(_) {}
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      window.removeEventListener('pointercancel', onCancel);
+      if (ghost) { ghost.remove(); ghost = null; }
+      // Restore touch-action
+      if (typeof el.__prevTouchAction !== 'undefined') {
+        el.style.touchAction = el.__prevTouchAction || '';
+        try { delete el.__prevTouchAction; } catch(_) {}
+      }
+    };
+
+    window.addEventListener('pointermove', onMove, { passive: false });
+    window.addEventListener('pointerup', onUp, { passive: false });
+    window.addEventListener('pointercancel', onCancel, { passive: false });
   });
 
   return el;
