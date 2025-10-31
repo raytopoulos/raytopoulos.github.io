@@ -1,0 +1,522 @@
+    :root{
+      --bg:#f8fafc; --panel:#ffffff; --panel-2:#f8fafc; --text:#0f172a; --muted:#64748b; --accent:#22d3ee; --accent-2:#38bdf8; --ring:rgba(34,211,238,.25);
+      --bubble-bg:#f1f5f9; --bubble-border:#cbd5e1; --shadow:0 6px 24px rgba(0,0,0,.12); --radius:16px;
+      --border:#e2e8f0;
+      --week-min-h: 360px;
+    }
+    *{ box-sizing:border-box; }
+    /* let the document grow */
+    html,body{ min-height:100%; }
+    /* SOLID body background (no gradients) */
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:"Inter", ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji";
+      overflow:auto;
+    }
+    /* app must not lock the viewport height */
+    .app{ min-height:100vh; min-height:100dvh; display:grid; grid-template-columns:300px 1fr; }
+
+    /* Sidebar */
+    aside.sidebar{
+      background:linear-gradient(180deg,var(--panel) 0%, var(--panel-2) 100%);
+      border-right:1px solid var(--border);
+      display:flex;
+      flex-direction:column;
+      padding:16px;
+      gap:16px;
+      z-index:10;
+      transition:transform .3s ease, box-shadow .3s ease;
+    }
+    .sidebar header{
+      font-weight:700;
+      font-size:16px;
+      letter-spacing:.05em;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      color:var(--text);
+      padding-bottom:10px;
+      border-bottom:1px solid var(--border);
+      position:relative;
+    }
+    .sidebar .close-btn{
+      position:absolute;
+      right:0;
+      top:0;
+      background:none;
+      border:none;
+      font-size:24px;
+      line-height:1;
+      cursor:pointer;
+      opacity:.5;
+      padding:0;
+      display:none; /* Only visible on mobile */
+    }
+    .sidebar .hint{
+      font-size:12px;
+      color:var(--muted);
+      padding:8px;
+      background:var(--panel-2);
+      border-radius:var(--radius);
+      border:1px dashed var(--border);
+    }
+    .sidebar .bubbles-list{
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      flex-grow:1;
+      overflow-y:auto;
+      padding-right:4px;
+    }
+    .sidebar .add-btn{
+      margin-top:auto;
+      padding:10px 16px;
+      background-color:var(--accent);
+      color:white;
+      border:none;
+      border-radius:var(--radius);
+      font-weight:600;
+      cursor:pointer;
+      transition:background-color .2s;
+      box-shadow:0 4px 12px rgba(34,211,238,.3);
+    }
+    .sidebar .add-btn:hover{ background-color:var(--accent-2); }
+    .sidebar .add-btn:focus-visible{ outline:3px solid var(--ring); outline-offset:2px; }
+
+    /* Main Content & Toolbar */
+    main{ position:relative; overflow:hidden; }
+    .toolbar{
+      padding:10px 16px;
+      display:flex;
+      align-items:center;
+      gap:16px;
+      border-bottom:1px solid var(--border);
+      background-color:var(--panel);
+      position:sticky;
+      top:0;
+      z-index:5;
+    }
+    .menu-btn{
+      padding:8px 10px;
+      background-color:var(--panel-2);
+      border:1px solid var(--border);
+      border-radius:var(--radius);
+      cursor:pointer;
+      transition:opacity .2s;
+      display:none; /* Only visible on mobile */
+    }
+    .menu-btn:hover{ opacity:.8; }
+    .toolbar-title{
+      font-weight:700;
+      color:var(--text);
+    }
+
+    /* Week Table Layout */
+    .week-container{
+      padding:16px;
+      overflow-x:auto; /* Ensure the table can scroll if necessary */
+    }
+    .week-table{
+      width:100%;
+      border-collapse:collapse; /* Collapse borders for a tight grid look */
+      border-spacing:0;
+      min-width:768px; /* Minimum width for desktop layout */
+      table-layout: fixed; /* Ensures all columns have equal width */
+    }
+    .week-table th{
+      padding:8px 12px;
+      text-align:center; /* Centered table field names */
+      font-size:12px;
+      font-weight:600;
+      letter-spacing:.05em;
+      text-transform:uppercase;
+      color:var(--muted);
+      border:1px solid var(--border); /* Clear lines for headers */
+    }
+    .week-table td{
+      border:1px solid var(--border); /* Clear lines for cells */
+      padding:0;
+      height:100%; /* Important for day flow container to fill */
+      position:relative;
+      min-height:var(--week-min-h);
+      vertical-align:top;
+    }
+    /* Hide day label on desktop (only needed for mobile accordion) */
+    .week-table tbody td::before{
+      content:attr(data-day);
+      display:none;
+    }
+
+    /* --- Accordion Hiding on Desktop (New) --- */
+    .day-accordion__header {
+      display: none; /* Hide header completely on desktop */
+    }
+    .day-accordion__content {
+      max-height: none !important; /* Force content open on desktop */
+      overflow: visible !important;
+    }
+    /* ------------------------------------------- */
+
+    /* Day Flow Container */
+    .day-flow-container{
+      min-height:var(--week-min-h);
+      padding:12px;
+      position:relative;
+      overflow:hidden;
+    }
+    
+    /* Desktop Bubble Stacking */
+    .day-flow{
+      display:flex;
+      flex-direction: column; /* Stack bubbles vertically */
+      align-content:flex-start;
+      gap:8px; /* Vertical gap between bubbles */
+      min-height:calc(var(--week-min-h) - 24px); 
+      padding:8px;
+      border:1px dashed transparent;
+      transition:border-color .2s;
+      border-radius:var(--radius);
+      flex-wrap: nowrap; /* Prevent horizontal wrapping on desktop */
+    }
+    
+    .day-flow.drop-active{
+      border-color:var(--accent);
+      background-color:rgba(34,211,238,.05);
+    }
+
+    /* Insertion helper line */
+    .insert-marker{
+      display:block;
+      height:2px;
+      width:100%;
+      background-color:var(--accent);
+      opacity:.85;
+      border-radius:1px;
+      pointer-events:none;
+    }
+
+    /* Bubble Styles */
+    .bubble{
+      padding:6px 10px;
+      border-radius:12px;
+      border:1px solid;
+      font-size:14px;
+      font-weight:600;
+      cursor:grab;
+      max-width:100%;
+      overflow:hidden;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+      box-shadow:0 1px 3px rgba(0,0,0,.05);
+      transition:opacity .2s, transform .2s;
+      width: 100%; /* Important for vertical stacking to fill container */
+    }
+    .bubble.prototype{
+        width: auto; /* Prototypes should not be full width */
+    }
+    .bubble.squared{
+      border-radius:6px;
+    }
+    .bubble:focus-visible{
+      outline:3px solid var(--ring);
+      outline-offset:2px;
+    }
+    .bubble:active{
+      cursor:grabbing;
+    }
+    .bubble.dragging{
+      opacity:.5;
+    }
+
+    /* Trash Zone */
+    #trash{
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      background:linear-gradient(0deg, #fef2f2 0%, #f8fafc00 100%);
+      padding:20px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      z-index:20;
+      pointer-events:none; /* Must be pointer-events:none by default */
+      opacity:0;
+      transition:opacity .3s, transform .3s;
+      height:120px;
+      border-top:1px solid #fecaca;
+    }
+    #trash.trash-active{
+      opacity:1;
+      pointer-events:auto;
+    }
+    #trash.drop-active svg{
+      transform:scale(1.1) rotate(5deg);
+    }
+    #trash svg{
+      width:36px;
+      height:36px;
+      stroke:#ef4444;
+      transition:transform .2s;
+    }
+    #trash .label{
+      font-size:14px;
+      font-weight:600;
+      color:#ef4444;
+      margin-top:8px;
+      letter-spacing:.05em;
+    }
+
+    /* Mobile Ghost element (custom drag) */
+    .drag-ghost{
+      position: fixed;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 9999;
+      opacity: .95;
+      box-shadow: var(--shadow, 0 6px 24px rgba(0,0,0,.12));
+    }
+
+    /* --- Mobile accordion styles (screens <= 768px) --- */
+    @media (max-width: 768px){
+      .app{
+        grid-template-columns:1fr; /* Full width for main content */
+        position:relative;
+        overflow-x:hidden;
+      }
+      .sidebar{
+        position:fixed;
+        top:0;
+        left:0;
+        bottom:0;
+        width:calc(100vw - 40px);
+        max-width:300px;
+        transform:translateX(-100%);
+        box-shadow:0 0 16px rgba(0,0,0,.2);
+        will-change:transform;
+      }
+      .sidebar.open{
+        transform:translateX(0);
+      }
+      .sidebar-backdrop{
+        position:fixed;
+        top:0;
+        left:0;
+        right:0;
+        bottom:0;
+        background-color:rgba(0,0,0,.5);
+        opacity:0;
+        visibility:hidden;
+        transition:opacity .3s, visibility .3s;
+        z-index:9;
+      }
+      .sidebar.open + .sidebar-backdrop{
+        opacity:1;
+        visibility:visible;
+      }
+      .menu-btn{
+        display:block;
+      }
+      .toolbar-title{
+        font-size:16px;
+      }
+
+      /* Day table adjustments (Mobile: List view) */
+      .week-table{
+        min-width:unset; /* Allow table to shrink */
+        width:100%;
+        border-collapse:separate; /* Revert to separate on mobile for list styling */
+      }
+      .week-table thead, .week-table th{
+        display:none; /* Hide original day headers */
+      }
+      .week-table td{
+        display:block; /* Each cell takes full width */
+        width:100%;
+        min-height:unset;
+        border:0; /* Remove borders between cells for clean list look */
+        padding:0;
+      }
+      .week-table tbody tr{
+        border-bottom:1px solid var(--border); /* Separate days with a single border */
+      }
+      
+      /* Re-enable Accordion Header on Mobile */
+      .day-accordion__header{
+        display:flex !important;
+        width:100%;
+        align-items:center;
+        justify-content:space-between;
+        gap:8px;
+        padding:10px 0;
+        font-weight:700;
+        color:var(--text);
+        background:none;
+        border:0;
+        cursor:pointer;
+        text-align:left; /* Fix text alignment */
+      }
+      .day-accordion__header .label{
+        letter-spacing:.08em;
+        text-transform:uppercase;
+        font-size:12px;
+        color:var(--muted);
+      }
+      .day-accordion__header .chev{
+        width:16px;
+        height:16px;
+        flex:0 0 auto;
+        transition:transform .2s ease;
+        opacity:.7;
+      }
+      .day-accordion__header[aria-expanded="true"] .chev{ transform:rotate(180deg); }
+
+      /* Re-enable Accordion Content Collapse/Expand */
+      .day-accordion__content{
+        max-height:0;
+        overflow:hidden;
+        transition:max-height .3s ease-out;
+      }
+      .day-accordion__content[aria-hidden="false"]{
+        max-height:5000px; /* Large value to allow content to show */
+      }
+      .day-flow-container{
+        min-height:unset; /* Allow flow container to shrink on mobile */
+        padding:0 12px 12px 12px;
+      }
+      
+      /* Mobile Bubble Wrapping */
+      .day-flow{
+        flex-direction: row; /* Allow horizontal wrapping on mobile */
+        flex-wrap: wrap; /* Restore wrapping */
+        width: 100%;
+        min-height:80px; /* Ensure small drop target when empty */
+        border:1px dashed var(--border);
+        background-color:var(--panel-2);
+      }
+      .bubble {
+        width: auto; /* Bubbles can auto-size their width on mobile */
+      }
+    }
+
+    /* Modal Styles */
+    .modal{
+      position:fixed;
+      top:0;
+      left:0;
+      right:0;
+      bottom:0;
+      background-color:rgba(0,0,0,.5);
+      z-index:50;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      opacity:0;
+      visibility:hidden;
+      transition:opacity .2s, visibility .2s;
+    }
+    .modal:not([hidden]){
+      opacity:1;
+      visibility:visible;
+    }
+    .dialog{
+      background-color:var(--panel);
+      padding:24px;
+      border-radius:var(--radius);
+      box-shadow:0 8px 32px rgba(0,0,0,.2);
+      width:90%;
+      max-width:400px;
+      transform:translateY(20px);
+      transition:transform .3s ease;
+    }
+    .modal:not([hidden]) .dialog{
+      transform:translateY(0);
+    }
+    .dialog h2{
+      margin-top:0;
+      margin-bottom:16px;
+      font-size:20px;
+      border-bottom:1px solid var(--border);
+      padding-bottom:10px;
+    }
+    .form-row{
+      margin-bottom:16px;
+    }
+    .form-row label{
+      display:block;
+      font-weight:600;
+      margin-bottom:4px;
+      font-size:14px;
+    }
+    .form-row input[type="text"]{
+      width:100%;
+      padding:8px 12px;
+      border:1px solid var(--border);
+      border-radius:8px;
+      background-color:var(--panel-2);
+      font-size:16px;
+    }
+    .form-row input[type="text"]:focus{
+      outline:2px solid var(--accent);
+      outline-offset:0;
+      border-color:transparent;
+    }
+    .color-swatch-group{
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+      margin-top:8px;
+    }
+    .color-swatch-group label{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      width:32px;
+      height:32px;
+      border-radius:50%;
+      border:2px solid transparent;
+      cursor:pointer;
+      transition:border-color .2s;
+    }
+    .color-swatch-group input[type="radio"]{
+      display:none;
+    }
+    .color-swatch-group input[type="radio"]:checked + label{
+      border-color:var(--text);
+      box-shadow:0 0 0 2px var(--panel);
+    }
+    .modal-actions{
+      display:flex;
+      justify-content:flex-end;
+      gap:10px;
+      margin-top:20px;
+    }
+    .modal-actions button{
+      padding:10px 16px;
+      border-radius:8px;
+      font-weight:600;
+      cursor:pointer;
+    }
+    #cancelBtn{
+      background-color:var(--panel-2);
+      border:1px solid var(--border);
+      color:var(--text);
+    }
+    #submitBtn{
+      background-color:var(--accent);
+      border:none;
+      color:white;
+      box-shadow:0 4px 8px rgba(34,211,238,.3);
+    }
+    .checkbox-group{
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .checkbox-group input[type="checkbox"]{
+      width:16px;
+      height:16px;
+    }
