@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Drag Anywhere — Demo</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #121a33;
+      --accent: #6ea8fe;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(1200px 800px at 20% 10%, #141b36 0%, var(--bg) 60%);
+      color: #cdd7f1;
+    }
+    .stage {
+      position: relative;
+      height: 100dvh;
+      width: 100%;
+      overflow: hidden;
+    }
+    #box {
+      width: 120px;
+      height: 120px;
+      background: linear-gradient(135deg, #7aa2ff, #a6d0ff);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(110, 168, 254, 0.35);
+      position: fixed; /* we will animate its position to the drop point */
+      left: 24px;
+      top: 24px;
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      color: #0b1020;
+      user-select: none;
+      touch-action: none; /* important for mobile dragging */
+      cursor: grab;
+    }
+    .status {
+      position: fixed;
+      left: 20px;
+      bottom: 20px;
+      background: rgba(18, 26, 51, 0.8);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.2;
+      backdrop-filter: blur(6px);
+      max-width: min(90vw, 520px);
+    }
+    .hint { opacity: 0.75; font-size: 11px; }
+    a, a:visited { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div id="box" aria-label="Draggable square">Drag me</div>
+    <div class="status" id="status">
+      <div><strong>Status:</strong> Ready. Grab the square on desktop or mobile.</div>
+      <div class="hint">Tip: On desktop it's real HTML5 Drag & Drop (with text+file in <code>DataTransfer</code>). On mobile it uses Pointer Events with a smooth mirror.</div>
+    </div>
+  </div>
+
+  <!-- Begin: drag-anywhere.js (embedded) -->
+  <script>
+  /*
+   * drag-anywhere.js — embedded
+   * See: drag-anywhere.js in the other tab for documented source.
+   */
+  (function (root, factory) {
+    if (typeof module === 'object' && module.exports) {
+      module.exports = factory();
+    } else {
+      root.DragAnywhere = factory();
+    }
+  })(typeof self !== 'undefined' ? self : this, function () {
+    'use strict';
+
+    const _states = new WeakMap();
+    const defaults = {
+      onStart: null,
+      onMove: null,
+      onDrop: null,
+      useNativeOnDesktop: true,
+      dragCursor: 'grabbing',
+      dragImage: null,
+      dataText: 'drag-anywhere',
+      addSyntheticTextFile: true,
+    };
+
+    function isTouchCapable() {
+      return (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+             (typeof window !== 'undefined' && 'ontouchstart' in window);
+    }
+    function preferNativeDnD() {
+      if (isTouchCapable()) return false;
+      try { return window.matchMedia && window.matchMedia('(pointer: fine)').matches; } catch { return true; }
+    }
+    function getClientXY(ev) {
+      if (ev && typeof ev.clientX === 'number') return { x: ev.clientX, y: ev.clientY };
+      const t = ev.touches && ev.touches[0] || ev.changedTouches && ev.changedTouches[0];
+      if (t) return { x: t.clientX, y: t.clientY };
+      return { x: 0, y: 0 };
+    }
+    function rectFrom(el) {
+      const r = el.getBoundingClientRect();
+      return { top: r.top, left: r.left, width: r.width, height: r.height };
+    }
+    function createMirror(el, rect, { zIndex = 999999 } = {}) {
+      const mirror = el.cloneNode(true);
+      mirror.style.position = 'fixed';
+      mirror.style.left = '0px';
+      mirror.style.top = '0px';
+      mirror.style.width = rect.width + 'px';
+      mirror.style.height = rect.height + 'px';
+      mirror.style.pointerEvents = 'none';
+      mirror.style.margin = '0';
+      mirror.style.boxSizing = 'border-box';
+      mirror.style.transform = 'translate(-50%, -50%)';
+      mirror.style.willChange = 'transform, left, top';
+      mirror.style.zIndex = '999999';
+      mirror.style.opacity = '0.9';
+      mirror.setAttribute('aria-hidden', 'true');
+      return mirror;
+    }
+    function placeMirror(m, x, y) { m.style.left = x + 'px'; m.style.top = y + 'px'; }
+    function setDragImage(ev, el, ox, oy) { try { ev.dataTransfer && ev.dataTransfer.setDragImage && ev.dataTransfer.setDragImage(el, ox, oy); } catch {}
+    }
+    function tryPopulateDataTransfer(ev, opts) {
+      if (!ev || !ev.dataTransfer) return;
+      try {
+        ev.dataTransfer.effectAllowed = 'move';
+        ev.dataTransfer.dropEffect = 'move';
+        ev.dataTransfer.setData('text/plain', String(opts.dataText || 'drag-anywhere'));
+        if (opts.addSyntheticTextFile && ev.dataTransfer.items && ev.dataTransfer.items.add) {
+          const blob = new Blob([String(opts.dataText || 'drag-anywhere') + '\n'], { type: 'text/plain' });
+          const file = new File([blob], 'drag.txt', { type: 'text/plain' });
+          ev.dataTransfer.items.add(file);
+        }
+      } catch {}
+    }
+
+    function makeDraggable(el, options = {}) {
+      if (!el || !(el instanceof Element)) throw new Error('makeDraggable: expected a DOM Element');
+      if (_states.has(el)) return _states.get(el).destroy;
+      const opts = Object.assign({}, defaults, options);
+      const state = {
+        el, opts,
+        nativeEligible: opts.useNativeOnDesktop && preferNativeDnD(),
+        active: false,
+        source: 'pointer',
+        startPos: null,
+        lastPos: null,
+        rect: null,
+        mirror: null,
+        originalDraggableAttr: el.getAttribute('draggable'),
+        cleanupFns: [],
+      };
+      function emit(cb, payload){ try { cb && cb(payload); } catch(e){ setTimeout(()=>{ throw e; }); } }
+      function beginCommon(pos, source, ev){
+        state.active = true; state.source = source; state.startPos = pos; state.lastPos = pos; state.rect = rectFrom(el);
+        const mirror = opts.dragImage || createMirror(el, state.rect); state.mirror = mirror;
+        document.body.appendChild(mirror); placeMirror(mirror, pos.x, pos.y);
+        if (opts.dragCursor) el.style.cursor = opts.dragCursor;
+        emit(opts.onStart, { x: pos.x, y: pos.y, rect: state.rect, source, event: ev });
+      }
+      function moveCommon(pos, ev){ state.lastPos = pos; if (state.mirror) placeMirror(state.mirror, pos.x, pos.y); emit(opts.onMove, { x: pos.x, y: pos.y, rect: state.rect, source: state.source, event: ev }); }
+      function endCommon(canceled, ev){ const last = state.lastPos || state.startPos || {x:0,y:0};
+        emit(opts.onDrop, { x: last.x, y: last.y, rect: state.rect, canceled: !!canceled, source: state.source, event: ev });
+        if (state.mirror && state.mirror.parentNode) state.mirror.parentNode.removeChild(state.mirror);
+        state.mirror=null; state.active=false; state.startPos=null; state.lastPos=null; state.rect=null;
+        if (opts.dragCursor) el.style.removeProperty('cursor'); }
+      function setupNative(){
+        el.setAttribute('draggable','true');
+        const onMouseDown = (ev)=>{ state._pendingStartPos = { x: ev.clientX, y: ev.clientY }; };
+        const onDragStart = (ev)=>{
+          state.source='native'; const startPos = state._pendingStartPos || { x: ev.clientX, y: ev.clientY };
+          beginCommon(startPos,'native',ev); tryPopulateDataTransfer(ev, opts);
+          const imgEl = opts.dragImage || state.mirror; if (imgEl){ const r = imgEl.getBoundingClientRect(); setDragImage(ev, imgEl, r.width/2, r.height/2); }
+        };
+        const onDragOverDoc = (ev)=>{ ev.preventDefault(); if (!state.active) return; moveCommon({ x: ev.clientX, y: ev.clientY }, ev); };
+        const onDragEnd = (ev)=>{ if (!state.active) return; endCommon(false, ev); };
+        el.addEventListener('mousedown', onMouseDown, { passive: true });
+        el.addEventListener('dragstart', onDragStart);
+        el.addEventListener('dragend', onDragEnd);
+        document.addEventListener('dragover', onDragOverDoc);
+        state.cleanupFns.push(()=>{
+          el.removeEventListener('mousedown', onMouseDown);
+          el.removeEventListener('dragstart', onDragStart);
+          el.removeEventListener('dragend', onDragEnd);
+          document.removeEventListener('dragover', onDragOverDoc);
+        });
+      }
+      function setupPointer(){
+        const onPointerDown = (ev)=>{ if (ev.button && ev.button !== 0) return; try { el.setPointerCapture && el.setPointerCapture(ev.pointerId); } catch {}
+          const pos = getClientXY(ev); beginCommon(pos,'pointer',ev); ev.preventDefault(); };
+        const onPointerMove = (ev)=>{ if (!state.active) return; moveCommon(getClientXY(ev), ev); ev.preventDefault(); };
+        const onPointerUp = (ev)=>{ if (!state.active) return; endCommon(false, ev); try { el.releasePointerCapture && el.releasePointerCapture(ev.pointerId);} catch{} ev.preventDefault(); };
+        const onPointerCancel = (ev)=>{ if (!state.active) return; endCommon(true, ev); try { el.releasePointerCapture && el.releasePointerCapture(ev.pointerId);} catch{} };
+        el.addEventListener('pointerdown', onPointerDown, { passive: false });
+        window.addEventListener('pointermove', onPointerMove, { passive: false });
+        window.addEventListener('pointerup', onPointerUp, { passive: false });
+        window.addEventListener('pointercancel', onPointerCancel, { passive: true });
+        state.cleanupFns.push(()=>{
+          el.removeEventListener('pointerdown', onPointerDown);
+          window.removeEventListener('pointermove', onPointerMove);
+          window.removeEventListener('pointerup', onPointerUp);
+          window.removeEventListener('pointercancel', onPointerCancel);
+        });
+      }
+      if (state.nativeEligible) { setupNative(); } else { setupPointer(); }
+      const destroy = ()=>{
+        state.cleanupFns.forEach((fn)=>{ try { fn(); } catch {} }); state.cleanupFns.length = 0;
+        if (state.mirror && state.mirror.parentNode) state.mirror.parentNode.removeChild(state.mirror);
+        if (state.originalDraggableAttr === null) el.removeAttribute('draggable'); else el.setAttribute('draggable', state.originalDraggableAttr);
+        _states.delete(el);
+      };
+      _states.set(el, { destroy, get active(){ return state.active; } });
+      return destroy;
+    }
+    function unmakeDraggable(el){ const st = _states.get(el); if (st) st.destroy(); }
+    function isDragging(el){ const st = _states.get(el); return !!(st && st.active); }
+    return { makeDraggable, unmakeDraggable, isDragging };
+  });
+  </script>
+  <!-- End: drag-anywhere.js (embedded) -->
+
+  <script>
+    const box = document.getElementById('box');
+    const status = document.getElementById('status');
+
+    // Hook up drag behavior
+    DragAnywhere.makeDraggable(box, {
+      dataText: 'Dragged the square',
+      addSyntheticTextFile: true,
+      onStart: ({ x, y, rect, source }) => {
+        status.innerHTML = `<div><strong>Status:</strong> Drag START @ (${Math.round(x)}, ${Math.round(y)}) — source: <code>${source}</code></div>`;
+      },
+      onMove: ({ x, y }) => {
+        status.innerHTML = `<div><strong>Status:</strong> Drag MOVE @ (${Math.round(x)}, ${Math.round(y)})</div><div class="hint">Release to drop and the square will snap there, centered.</div>`;
+      },
+      onDrop: ({ x, y, rect, source }) => {
+        // Move the actual element to the drop point, centered under cursor
+        const left = x - rect.width / 2;
+        const top = y - rect.height / 2;
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+        status.innerHTML = `<div><strong>Status:</strong> Drag DROP @ (${Math.round(x)}, ${Math.round(y)}) — source: <code>${source}</code></div>`;
+      }
+    });
+
+    // Optional: prevent default navigation on stray drops outside the element
+    window.addEventListener('dragover', ev => ev.preventDefault());
+    window.addEventListener('drop', ev => ev.preventDefault());
+  </script>
+</body>
+</html>

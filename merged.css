@@ -150,12 +150,14 @@
     }
 
     /* --- Accordion Hiding on Desktop (New) --- */
-    .day-accordion__header {
-      display: none; /* Hide header completely on desktop */
-    }
-    .day-accordion__content {
-      max-height: none !important; /* Force content open on desktop */
-      overflow: visible !important;
+    @media (min-width: 769px){
+      .day-accordion__header {
+        display: none; /* Hide header completely on desktop */
+      }
+      .day-accordion__content {
+        max-height: none !important; /* Force content open on desktop */
+        overflow: visible !important;
+      }
     }
     /* ------------------------------------------- */
 
@@ -212,6 +214,7 @@
       box-shadow:0 1px 3px rgba(0,0,0,.05);
       transition:opacity .2s, transform .2s;
       width: 100%; /* Important for vertical stacking to fill container */
+      touch-action:none; /* Ensure pointer events during drag on mobile */
     }
     .bubble.prototype{
         width: auto; /* Prototypes should not be full width */
@@ -287,6 +290,9 @@
         position:relative;
         overflow-x:hidden;
       }
+      .sidebar .close-btn{
+        display:block; /* Show X button on mobile */
+      }
       .sidebar{
         position:fixed;
         top:0;
@@ -314,6 +320,11 @@
         z-index:9;
       }
       .sidebar.open + .sidebar-backdrop{
+        opacity:1;
+        visibility:visible;
+      }
+      /* Fallback when backdrop is not adjacent to sidebar */
+      .sidebar-backdrop.open{
         opacity:1;
         visibility:visible;
       }
@@ -378,7 +389,7 @@
       .day-accordion__content{
         max-height:0;
         overflow:hidden;
-        transition:max-height .3s ease-out;
+        transition:max-height .2s ease-out;
       }
       .day-accordion__content[aria-hidden="false"]{
         max-height:5000px; /* Large value to allow content to show */
@@ -386,19 +397,20 @@
       .day-flow-container{
         min-height:unset; /* Allow flow container to shrink on mobile */
         padding:0 12px 12px 12px;
+        overflow:visible; /* Let expanded content push layout */
       }
       
-      /* Mobile Bubble Wrapping */
+      /* Mobile Bubble Vertical Stacking (align like desktop) */
       .day-flow{
-        flex-direction: row; /* Allow horizontal wrapping on mobile */
-        flex-wrap: wrap; /* Restore wrapping */
+        flex-direction: column; /* Stack vertically on mobile accordions */
+        flex-wrap: nowrap;
         width: 100%;
         min-height:80px; /* Ensure small drop target when empty */
         border:1px dashed var(--border);
         background-color:var(--panel-2);
       }
       .bubble {
-        width: auto; /* Bubbles can auto-size their width on mobile */
+        width: 100%; /* Match desktop full-width stacking */
       }
     }
 

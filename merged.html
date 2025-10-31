@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bubble Canvas (Table Layout)</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="merged.css">
+</head>
+<body>
+  <!-- Sidebar Backdrop (for mobile) -->
+  <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
+
+  <div class="app" role="application" aria-label="Bubble canvas app">
+    <aside id="sidebar" class="sidebar" aria-label="Bubble library">
+      <header>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10v10H7z" stroke="#38bdf8" stroke-width="1.5"/><path d="M12 4v16M4 12h16" stroke="#22d3ee" stroke-width="1.5"/></svg>
+        Bubble Library
+        <button id="closeSidebar" class="close-btn" aria-label="Close library" title="Close">&times;</button>
+      </header>
+      <div class="hint">Drag a bubble onto the canvas to create an instance.</div>
+
+      <div id="templates" class="bubbles-list" aria-live="polite"></div>
+
+      <button id="addBtn" class="add-btn" aria-label="Add bubble">+ Add bubble</button>
+    </aside>
+
+    <main>
+      <div class="toolbar">
+        <button id="menuBtn" class="menu-btn" aria-controls="sidebar" aria-expanded="false" aria-label="Open menu">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+        <div class="toolbar-title">Weekly Planner</div>
+      </div>
+
+      <div class="week-container">
+        <div class="day-view">
+          <table class="week-table" role="grid">
+            <thead>
+              <tr>
+                <th>Monday</th>
+                <th>Tuesday</th>
+                <th>Wednesday</th>
+                <th>Thursday</th>
+                <th>Friday</th>
+                <th>Saturday</th>
+                <th>Sunday</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-day="Mon">
+                  <!-- Accordion header hidden by default, shown on mobile via media query -->
+                  <button class="day-accordion__header" aria-expanded="true" aria-controls="day-content-0">
+                    <span class="label">Monday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <!-- Accordion content forced open on desktop via CSS, collapsible on mobile -->
+                  <div id="day-content-0" class="day-accordion__content" aria-hidden="false">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="0" role="group" aria-label="Monday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+                <td data-day="Tue">
+                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-1">
+                    <span class="label">Tuesday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <div id="day-content-1" class="day-accordion__content" aria-hidden="true">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="1" role="group" aria-label="Tuesday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+                <td data-day="Wed">
+                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-2">
+                    <span class="label">Wednesday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <div id="day-content-2" class="day-accordion__content" aria-hidden="true">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="2" role="group" aria-label="Wednesday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+                <td data-day="Thu">
+                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-3">
+                    <span class="label">Thursday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <div id="day-content-3" class="day-accordion__content" aria-hidden="true">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="3" role="group" aria-label="Thursday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+                <td data-day="Fri">
+                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-4">
+                    <span class="label">Friday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <div id="day-content-4" class="day-accordion__content" aria-hidden="true">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="4" role="group" aria-label="Friday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+                <td data-day="Sat">
+                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-5">
+                    <span class="label">Saturday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <div id="day-content-5" class="day-accordion__content" aria-hidden="true">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="5" role="group" aria-label="Saturday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+                <td data-day="Sun">
+                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-6">
+                    <span class="label">Sunday</span>
+                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </button>
+                  <div id="day-content-6" class="day-accordion__content" aria-hidden="true">
+                    <div class="day-flow-container">
+                      <div class="day-flow" data-day-index="6" role="group" aria-label="Sunday Tasks"></div>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+  <div id="trash" class="trash-zone" aria-hidden="true" aria-label="Delete dropzone">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18M9 6v-1a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" stroke="#e5e7eb" stroke-width="1.5"/><path d="M10 10v8M14 10v8" stroke="#f87171" stroke-width="1.5"/></svg>
+    <div class="label">Drop to delete</div>
+  </div>
+
+  <!-- New Bubble Modal -->
+  <div id="modal" class="modal" hidden>
+    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <h2 id="dlg-title">Create a new bubble</h2>
+      <form id="newBubbleForm">
+        <div class="form-row">
+          <label for="bubbleText">Bubble text</label>
+          <input id="bubbleText" name="bubbleText" type="text" placeholder="e.g. Idea, Todo, Person�??" required minlength="1" />
+        </div>
+        <div class="form-row">
+          <label>Color</label>
+          <div class="color-swatch-group" role="radiogroup" aria-label="Select bubble color">
+            <input type="radio" id="color-blue" name="bubbleColor" value="#38bdf8" checked><label for="color-blue" style="background-color: #38bdf8;" title="Blue"></label>
+            <input type="radio" id="color-purple" name="bubbleColor" value="#a78bfa"><label for="color-purple" style="background-color: #a78bfa;" title="Purple"></label>
+            <input type="radio" id="color-red" name="bubbleColor" value="#f87171"><label for="color-red" style="background-color: #f87171;" title="Red"></label>
+            <input type="radio" id="color-green" name="bubbleColor" value="#10b981"><label for="color-green" style="background-color: #10b981;" title="Green"></label>
+            <input type="radio" id="color-yellow" name="bubbleColor" value="#facc15"><label for="color-yellow" style="background-color: #facc15;" title="Yellow"></label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="checkbox-group">
+            <input type="checkbox" id="bubbleSquared" name="bubbleSquared" value="true">
+            <label for="bubbleSquared">Squared corners</label>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelBtn">Cancel</button>
+          <button type="submit" id="submitBtn">Create Bubble</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="merged.js"></script>
+</body>
+</html>
