@@ -145,6 +145,7 @@ export function createDragController({
     removeInsertMarker();
     registerRefresh.clear();
     currentDrag = null;
+    try { document.body.classList.remove('is-dragging'); } catch {}
   }
 
   function updateDropState(x, y) {
@@ -238,6 +239,7 @@ export function createDragController({
     };
 
     el.classList.add('dragging');
+    try { document.body.classList.add('is-dragging'); } catch {}
     if (trash) {
       trash.classList.add('trash-active');
     }

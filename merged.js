@@ -2,6 +2,25 @@ import { createAccordionController } from './accordion.js';
 import { createBubbleManager } from './bubble-manager.js';
 import { createDragController } from './drag-controller.js';
 
+// Prevent native drag ghost and context menu interfering with custom DnD
+document.addEventListener('dragstart', (e) => {
+  e.preventDefault();
+}, true);
+
+window.addEventListener('contextmenu', (e) => {
+  if (document.body.classList.contains('is-dragging')) {
+    e.preventDefault();
+  }
+}, { capture: true });
+
+// On coarse pointers (touch), avoid native HTML draggable elements
+try {
+  const isCoarse = matchMedia && matchMedia('(pointer: coarse)').matches;
+  if (isCoarse) {
+    document.querySelectorAll('[draggable="true"]').forEach((el) => el.removeAttribute('draggable'));
+  }
+} catch {}
+
 document.addEventListener('DOMContentLoaded', () => {
   const sidebar = document.querySelector('aside.sidebar');
   const menuBtn = document.getElementById('menuBtn');

@@ -44,7 +44,8 @@ export function createBubbleManager({
     if (square) {
       el.classList.add('squared');
     }
-    el.setAttribute('draggable', 'true');
+    // Suppress native drag/copy/long-press actions
+    el.setAttribute('draggable', 'false');
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     el.setAttribute('data-text', text);
@@ -54,6 +55,12 @@ export function createBubbleManager({
     el.style.backgroundColor = color;
     el.style.borderColor = adjustColor(color, -20);
     el.style.color = isLight(color) ? 'var(--text)' : 'white';
+    el.style.userSelect = 'none';
+    el.style.webkitUserDrag = 'none';
+
+    // Prevent long-press context menu and native drag/copy
+    el.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+    el.addEventListener('contextmenu', e => e.preventDefault());
 
     el.addEventListener('click', () => {
       // No longer add bubbles on click - only support drag and drop

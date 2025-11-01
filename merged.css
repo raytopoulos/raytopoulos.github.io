@@ -215,6 +215,9 @@
       transition:opacity .2s, transform .2s;
       width: 100%; /* Important for vertical stacking to fill container */
       touch-action:none; /* Ensure pointer events during drag on mobile */
+      user-select:none;              /* Prevent text selection while initiating drag */
+      -webkit-user-select:none;
+      -webkit-user-drag:none;       /* Prevent native drag ghost on WebKit */
     }
     .bubble.prototype{
         width: auto; /* Prototypes should not be full width */
@@ -531,4 +534,37 @@
     .checkbox-group input[type="checkbox"]{
       width:16px;
       height:16px;
+    }
+
+    /* --- Mobile DnD hardening --- */
+    /* Only on actual draggable (or its handle) so scrolling still works */
+    .bubble,
+    .bubble [data-drag-handle] {
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    /* Images/links can spawn native drags on Android */
+    .bubble img,
+    .bubble a {
+      -webkit-user-drag: none;
+    }
+
+    /* Let accordion-like containers keep vertical scroll by default */
+    .accordion {
+      touch-action: pan-y;
+    }
+    .day-accordion__content {
+      touch-action: pan-y;
+    }
+
+    /* During an active drag: kill selection & rubber-banding globally */
+    .is-dragging * {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    .is-dragging {
+      overscroll-behavior: contain;
     }
