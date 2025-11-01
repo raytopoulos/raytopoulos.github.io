@@ -56,14 +56,13 @@ export function createBubbleManager({
     el.style.color = isLight(color) ? 'var(--text)' : 'white';
 
     el.addEventListener('click', () => {
+      // No longer add bubbles on click - only support drag and drop
       const now = (typeof performance !== 'undefined' && performance.now)
         ? performance.now()
         : Date.now();
       if (el.__suppressClickUntil && now < el.__suppressClickUntil) {
         return;
       }
-      const targetDay = window.innerWidth > 768 ? 0 : getCurrentAccordionIndex();
-      addBubbleToDay(targetDay, text, color, { square });
     });
 
     dragController.wireBubble(el);

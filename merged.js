@@ -123,10 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!text) return;
 
       bubbleManager.prependPrototype({ text, color, square });
-
-      const targetDay = window.innerWidth > 768 ? 0 : accordion.getCurrentOpenIndex();
-      bubbleManager.addBubbleToDay(targetDay, text, color, { square });
-
       closeModal();
     });
   }

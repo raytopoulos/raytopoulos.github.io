@@ -83,17 +83,38 @@ export function createDragController({
     }
   }
 
+  let hoverOpenTimer = null;
+  
   function autoOpenDay(target) {
     if (!target) return;
     if (window.innerWidth > 768) return;
+
+    // Clear any existing hover timer
+    if (hoverOpenTimer) {
+      clearTimeout(hoverOpenTimer);
+      hoverOpenTimer = null;
+    }
+
     const rawIndex = target.getAttribute('data-day-index');
     const index = Number(rawIndex);
     if (!Number.isFinite(index)) return;
     if (accordion.getCurrentOpenIndex() === index) return;
-    accordion.openByIndex(index);
+    
+    // Set a timer to open after a short hover
+    hoverOpenTimer = setTimeout(() => {
+      accordion.openByIndex(index);
+    }, 200); // 200ms hover delay before opening - more responsive
+  }
+
+  function cleanupHoverTimer() {
+    if (hoverOpenTimer) {
+      clearTimeout(hoverOpenTimer);
+      hoverOpenTimer = null;
+    }
   }
 
   function cleanupDragState() {
+    cleanupHoverTimer();
     if (!currentDrag) return;
     const sourceEl = currentDrag.sourceElement;
     if (sourceEl) {
@@ -118,7 +139,25 @@ export function createDragController({
   function updateDropState(x, y) {
     if (!currentDrag) return;
 
-    const target = getDropTargetAt(x, y);
+    // Get the element directly under the pointer for hover detection
+    const elementUnderPointer = document.elementFromPoint(x, y);
+    const accordionHeader = elementUnderPointer?.closest('.day-accordion__header');
+    const accordionContent = elementUnderPointer?.closest('.day-accordion__content');
+    
+    // If we're over an accordion header, get its associated day-flow
+    let target;
+    if (accordionHeader) {
+      const contentId = accordionHeader.getAttribute('aria-controls');
+      const content = contentId ? document.getElementById(contentId) : null;
+      target = content?.querySelector('.day-flow');
+      if (target) {
+        autoOpenDay(target);
+      }
+    } else {
+      target = getDropTargetAt(x, y);
+      cleanupHoverTimer();
+    }
+
     setActiveDropTarget(target);
 
     if (trash) {
@@ -138,7 +177,6 @@ export function createDragController({
       );
       currentDrag.anchor = anchor;
       showInsertMarker(target, anchor);
-      autoOpenDay(target);
     } else {
       currentDrag.anchor = null;
       removeInsertMarker();

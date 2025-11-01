@@ -185,33 +185,107 @@ export function makeDraggable(el, options = {}) {
   }
 
   function setupPointer() {
+    let pointerDownTimer = null;
+    let initialPointerId = null;
+    let hasCapturedPointer = false;
+
     const onPointerDown = (ev) => {
       if (ev.button && ev.button !== 0) return;
-      try {
-        el.setPointerCapture && el.setPointerCapture(ev.pointerId);
-      } catch {}
-      const pos = getClientXY(ev);
-      beginCommon(pos, 'pointer', ev);
       ev.preventDefault();
+      
+      // Clear any existing timer
+      if (pointerDownTimer) {
+        clearTimeout(pointerDownTimer);
+      }
+      
+      initialPointerId = ev.pointerId;
+      const pos = getClientXY(ev);
+      
+      try {
+        // Capture the pointer immediately to prevent scrolling
+        el.setPointerCapture && el.setPointerCapture(ev.pointerId);
+        hasCapturedPointer = true;
+      } catch {}
+
+      // For touch devices, add a delay before starting the drag
+      if (ev.pointerType === 'touch') {
+        pointerDownTimer = setTimeout(() => {
+          if (hasCapturedPointer && initialPointerId === ev.pointerId) {
+            beginCommon(pos, 'pointer', ev);
+          }
+        }, 150); // 150ms delay for touch devices
+      } else {
+        // For mouse/pen, start immediately
+        beginCommon(pos, 'pointer', ev);
+      }
     };
+
     const onPointerMove = (ev) => {
+      if (pointerDownTimer && ev.pointerType === 'touch') {
+        // If we haven't started dragging yet but moved significantly, cancel the timer
+        const pos = getClientXY(ev);
+        if (Math.abs(ev.movementX) > 5 || Math.abs(ev.movementY) > 5) {
+          clearTimeout(pointerDownTimer);
+          pointerDownTimer = null;
+          if (hasCapturedPointer) {
+            try {
+              el.releasePointerCapture(ev.pointerId);
+              hasCapturedPointer = false;
+            } catch {}
+          }
+          return;
+        }
+      }
+
       if (!state.active) return;
       moveCommon(getClientXY(ev), ev);
       ev.preventDefault();
     };
+
     const onPointerUp = (ev) => {
-      if (!state.active) return;
+      if (pointerDownTimer) {
+        clearTimeout(pointerDownTimer);
+        pointerDownTimer = null;
+      }
+
+      if (!state.active) {
+        if (hasCapturedPointer) {
+          try {
+            el.releasePointerCapture(ev.pointerId);
+            hasCapturedPointer = false;
+          } catch {}
+        }
+        return;
+      }
+
       endCommon(false, ev);
       try {
-        el.releasePointerCapture && el.releasePointerCapture(ev.pointerId);
+        el.releasePointerCapture(ev.pointerId);
+        hasCapturedPointer = false;
       } catch {}
       ev.preventDefault();
     };
+
     const onPointerCancel = (ev) => {
-      if (!state.active) return;
+      if (pointerDownTimer) {
+        clearTimeout(pointerDownTimer);
+        pointerDownTimer = null;
+      }
+
+      if (!state.active) {
+        if (hasCapturedPointer) {
+          try {
+            el.releasePointerCapture(ev.pointerId);
+            hasCapturedPointer = false;
+          } catch {}
+        }
+        return;
+      }
+
       endCommon(true, ev);
       try {
-        el.releasePointerCapture && el.releasePointerCapture(ev.pointerId);
+        el.releasePointerCapture(ev.pointerId);
+        hasCapturedPointer = false;
       } catch {}
     };
     el.addEventListener('pointerdown', onPointerDown, { passive: false });
