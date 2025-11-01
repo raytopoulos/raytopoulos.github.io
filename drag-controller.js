@@ -84,32 +84,43 @@ export function createDragController({
   }
 
   let hoverOpenTimer = null;
+  let hoverOpenTarget = null;
   
   function autoOpenDay(target) {
     if (!target) return;
     if (window.innerWidth > 768) return;
+    // If we're already planning to open this same target, do nothing
+    if (hoverOpenTarget === target) return;
 
-    // Clear any existing hover timer
+    // Clear any existing hover timer for a different target
     if (hoverOpenTimer) {
       clearTimeout(hoverOpenTimer);
       hoverOpenTimer = null;
+      hoverOpenTarget = null;
     }
 
     const rawIndex = target.getAttribute('data-day-index');
     const index = Number(rawIndex);
     if (!Number.isFinite(index)) return;
     if (accordion.getCurrentOpenIndex() === index) return;
-    
-    // Set a timer to open after a short hover
+
+    // Remember the target we're about to open and set a short timer
+    hoverOpenTarget = target;
     hoverOpenTimer = setTimeout(() => {
-      accordion.openByIndex(index);
-    }, 200); // 200ms hover delay before opening - more responsive
+      // Only open if the target is still the same
+      if (hoverOpenTarget === target) {
+        accordion.openByIndex(index);
+      }
+      hoverOpenTimer = null;
+      hoverOpenTarget = null;
+    }, 120); // 120ms hover delay: responsive but small
   }
 
   function cleanupHoverTimer() {
     if (hoverOpenTimer) {
       clearTimeout(hoverOpenTimer);
       hoverOpenTimer = null;
+      hoverOpenTarget = null;
     }
   }
 
@@ -142,17 +153,28 @@ export function createDragController({
     // Get the element directly under the pointer for hover detection
     const elementUnderPointer = document.elementFromPoint(x, y);
     const accordionHeader = elementUnderPointer?.closest('.day-accordion__header');
-    const accordionContent = elementUnderPointer?.closest('.day-accordion__content');
-    
-    // If we're over an accordion header, get its associated day-flow
-    let target;
+  const accordionContent = elementUnderPointer?.closest('.day-accordion__content');
+  const dayFlowUnder = elementUnderPointer?.closest('.day-flow');
+  const dayCell = elementUnderPointer?.closest('td[data-day]');
+
+    // Prefer header -> content -> direct day-flow for hover target
+    let target = null;
     if (accordionHeader) {
       const contentId = accordionHeader.getAttribute('aria-controls');
       const content = contentId ? document.getElementById(contentId) : null;
-      target = content?.querySelector('.day-flow');
-      if (target) {
-        autoOpenDay(target);
-      }
+      target = content?.querySelector('.day-flow') || null;
+      if (target) autoOpenDay(target);
+    } else if (accordionContent) {
+      target = accordionContent.querySelector('.day-flow') || null;
+      if (target) autoOpenDay(target);
+    } else if (dayFlowUnder) {
+      target = dayFlowUnder;
+      // hovering over the day area should also open it
+      autoOpenDay(target);
+    } else if (dayCell) {
+      // Hovering over the table cell area (label gaps) should open the accordion too
+      target = dayCell.querySelector('.day-flow') || null;
+      if (target) autoOpenDay(target);
     } else {
       target = getDropTargetAt(x, y);
       cleanupHoverTimer();
