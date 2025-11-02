@@ -127,6 +127,11 @@ export function makeDraggable(el, options = {}) {
     state.lastPos = pos;
     state.rect = rectFrom(el);
 
+    // Important: Fire onStart BEFORE moving the element to <body> when
+    // using the original as the mirror. This lets callers capture the
+    // original parent/position to restore on invalid drops.
+    emit(opts.onStart, { x: pos.x, y: pos.y, rect: state.rect, source, event: ev });
+
     const useOriginal = !!opts.useOriginalAsMirror;
     if (useOriginal) {
       // Preserve a snapshot of inline styles we are about to modify
@@ -169,7 +174,6 @@ export function makeDraggable(el, options = {}) {
 
     placeMirror(state.mirror, pos.x, pos.y);
     if (opts.dragCursor) el.style.cursor = opts.dragCursor;
-    emit(opts.onStart, { x: pos.x, y: pos.y, rect: state.rect, source, event: ev });
   }
 
   function moveCommon(pos, ev) {
