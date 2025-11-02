@@ -48,6 +48,8 @@ export function createDragController({
   accordion,
 }) {
   let addBubbleHandler = null;
+  let moveBubbleHandler = null;
+  let deleteBubbleHandler = null;
   let currentDrag = null;
   let activeDropTarget = null;
   const insertMarkerRef = { current: null };
@@ -274,6 +276,14 @@ export function createDragController({
 
     if (!canceled && target && target.id === 'trash') {
       if (currentDrag.sourceType === 'day-flow' && currentDrag.sourceElement) {
+        try {
+          if (typeof deleteBubbleHandler === 'function') {
+            deleteBubbleHandler({
+              el: currentDrag.sourceElement,
+              fromDayIndex: currentDrag.sourceDayIndex,
+            });
+          }
+        } catch {}
         currentDrag.sourceElement.remove();
       }
       cleanupDragState();
@@ -313,6 +323,15 @@ export function createDragController({
           } else {
             target.appendChild(el);
           }
+          try {
+            if (typeof moveBubbleHandler === 'function') {
+              moveBubbleHandler({
+                el,
+                fromDayIndex: currentDrag.sourceDayIndex,
+                toDayIndex: dropDayIndex,
+              });
+            }
+          } catch {}
         }
       }
 
@@ -370,5 +389,7 @@ export function createDragController({
   return {
     wireBubble,
     setAddBubbleHandler,
+    setMoveBubbleHandler: (handler) => { moveBubbleHandler = handler; },
+    setDeleteBubbleHandler: (handler) => { deleteBubbleHandler = handler; },
   };
 }

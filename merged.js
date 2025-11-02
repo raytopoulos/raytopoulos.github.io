@@ -1,6 +1,7 @@
 import { createAccordionController } from './accordion.js';
 import { createBubbleManager } from './bubble-manager.js';
 import { createDragController } from './drag-controller.js';
+import { createInstance, loadInstance, pushDayItem, setDayItem, removeDayItem, DAYS } from './instances.js';
 
 // Prevent native drag ghost and context menu interfering with custom DnD
 document.addEventListener('dragstart', (e) => {
@@ -84,9 +85,127 @@ document.addEventListener('DOMContentLoaded', () => {
     getCurrentAccordionIndex: () => accordion.getCurrentOpenIndex(),
   });
 
-  dragController.setAddBubbleHandler(({ dayIndex, text, color, square, before }) => {
-    bubbleManager.addBubbleToDay(dayIndex, text, color, { square, before });
+  // Instance + persistence wiring using instances.js
+  const LS_KEY = 'organizer:instanceId';
+  let currentInstanceId = null;
+
+  function dayIndexToName(i) { return DAYS[i] || null; }
+
+  function getDayFlowEl(index) {
+    return document.querySelector(`.day-flow[data-day-index="${index}"]`);
+  }
+
+  async function ensureInstanceId() {
+    if (currentInstanceId) return currentInstanceId;
+    const url = new URL(location.href);
+    const fromUrl = url.searchParams.get('id');
+    const fromLS = localStorage.getItem(LS_KEY) || null;
+    let id = fromUrl || fromLS;
+    if (!id) {
+      const created = await createInstance();
+      id = created.id;
+      try { localStorage.setItem(LS_KEY, id); } catch {}
+      try {
+        url.searchParams.set('id', id);
+        history.replaceState({}, '', url.toString());
+      } catch {}
+    } else {
+      // keep LS and URL in sync if they differ
+      try { localStorage.setItem(LS_KEY, id); } catch {}
+      try {
+        if (!fromUrl) {
+          url.searchParams.set('id', id);
+          history.replaceState({}, '', url.toString());
+        }
+      } catch {}
+    }
+    currentInstanceId = id;
+    return id;
+  }
+
+  function getBubbleDataFromEl(el) {
+    const text = el.getAttribute('data-text') || el.textContent || '';
+    const color = el.getAttribute('data-color') || '#38bdf8';
+    const square = el.getAttribute('data-square') === 'true';
+    return { title: text, color, square };
+  }
+
+  async function persistDayPositions(dayIndex) {
+    const id = await ensureInstanceId();
+    const dayName = dayIndexToName(dayIndex);
+    if (!dayName) return;
+    const flow = getDayFlowEl(dayIndex);
+    if (!flow) return;
+    const bubbles = Array.from(flow.querySelectorAll('.bubble'));
+    let position = 0;
+    for (const el of bubbles) {
+      // Skip insert markers or non-bubbles just in case
+      if (!el || !el.classList.contains('bubble')) continue;
+      let childId = el.getAttribute('data-id');
+      const data = getBubbleDataFromEl(el);
+      if (!childId) {
+        const created = await pushDayItem(id, dayName, { ...data, position });
+        childId = created.id;
+        el.setAttribute('data-id', childId);
+      }
+      await setDayItem(id, dayName, childId, { ...data, position });
+      position += 1;
+    }
+  }
+
+  async function handleMove({ el, fromDayIndex, toDayIndex }) {
+    const id = await ensureInstanceId();
+    const fromName = dayIndexToName(fromDayIndex);
+    const toName = dayIndexToName(toDayIndex);
+    if (fromName == null || toName == null) return;
+    const childId = el.getAttribute('data-id');
+    const data = getBubbleDataFromEl(el);
+    if (!childId) {
+      // No id yet; treat this as a new insert into destination
+      const created = await pushDayItem(id, toName, { ...data, position: 0 });
+      el.setAttribute('data-id', created.id);
+    } else if (fromName !== toName) {
+      // Move across days: write to new day with same id, then remove from old
+      // Position will be finalized by persistDayPositions
+      const flow = getDayFlowEl(toDayIndex);
+      const pos = flow ? Array.from(flow.querySelectorAll('.bubble')).indexOf(el) : 0;
+      await setDayItem(id, toName, childId, { ...data, position: Math.max(0, pos) });
+      await removeDayItem(id, fromName, childId);
+    }
+    // Update positions for both days as needed
+    await persistDayPositions(toDayIndex);
+    if (fromName !== toName) {
+      await persistDayPositions(fromDayIndex);
+    }
+  }
+
+  async function handleDelete({ el, fromDayIndex }) {
+    const id = await ensureInstanceId();
+    const dayName = dayIndexToName(fromDayIndex);
+    if (!dayName) return;
+    const childId = el.getAttribute('data-id');
+    if (childId) {
+      await removeDayItem(id, dayName, childId);
+    }
+    await persistDayPositions(fromDayIndex);
+  }
+
+  dragController.setAddBubbleHandler(async ({ dayIndex, text, color, square, before }) => {
+    try {
+      const el = bubbleManager.addBubbleToDay(dayIndex, text, color, { square, before });
+      const id = await ensureInstanceId();
+      const dayName = dayIndexToName(dayIndex);
+      if (!dayName) return;
+      const created = await pushDayItem(id, dayName, { title: text, color, square, position: 0 });
+      el.setAttribute('data-id', created.id);
+      await persistDayPositions(dayIndex);
+    } catch (e) {
+      console.warn('Failed to save new bubble', e);
+    }
   });
+
+  dragController.setMoveBubbleHandler((payload) => { handleMove(payload).catch((e) => console.warn('Move persist failed', e)); });
+  dragController.setDeleteBubbleHandler((payload) => { handleDelete(payload).catch((e) => console.warn('Delete persist failed', e)); });
 
   bubbleManager.renderInitialPrototypes();
 
@@ -145,9 +264,24 @@ document.addEventListener('DOMContentLoaded', () => {
       closeModal();
     });
   }
-
-  bubbleManager.addBubbleToDay(0, 'Finish App Merge', '#a78bfa', { square: true });
-  bubbleManager.addBubbleToDay(0, 'Check Emails', '#38bdf8');
-  bubbleManager.addBubbleToDay(2, 'Review PR', '#f87171');
-  bubbleManager.addBubbleToDay(4, 'Deploy Code', '#10b981');
+  // Load instance (from URL or localStorage) and render saved bubbles
+  (async () => {
+    const id = await ensureInstanceId();
+    try {
+      const snap = await loadInstance(id);
+      const days = (snap && snap.days) || {};
+      DAYS.forEach((dayName, idx) => {
+        const items = days[dayName] || {};
+        const ordered = Object.entries(items).map(([key, val]) => ({ id: key, ...val }))
+          .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+        for (const item of ordered) {
+          const el = bubbleManager.addBubbleToDay(idx, item.title || '', `#${item.color || '38bdf8'}`, { square: Boolean(item.square) });
+          el.setAttribute('data-id', item.id);
+        }
+      });
+    } catch (e) {
+      // Non-fatal: if load fails, continue with empty state
+      console.warn('Failed to load instance', e);
+    }
+  })();
 });

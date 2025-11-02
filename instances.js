@@ -1,0 +1,156 @@
+// organizer/instances.js
+// Small API module to create and load instances under /instances.
+// Includes Firebase initialization (merged from firebase.js).
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-app.js";
+import { getDatabase /*, connectDatabaseEmulator */, ref, push, set, get, remove } from "https://www.gstatic.com/firebasejs/12.5.0/firebase-database.js";
+
+export const firebaseConfig = {
+  apiKey: "AIzaSyAM0jSKxniPCNdemeq6vcMHPOPepkwCEUs",
+  authDomain: "bubbleorganizer-ac487.firebaseapp.com",
+  databaseURL: "https://bubbleorganizer-ac487-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "bubbleorganizer-ac487",
+  storageBucket: "bubbleorganizer-ac487.firebasestorage.app",
+  messagingSenderId: "1052154676115",
+  appId: "1:1052154676115:web:854853336f788e37cd5e66"
+};
+
+export const app = initializeApp(firebaseConfig);
+export const db  = getDatabase(app);
+
+// For local testing with the Realtime Database Emulator, uncomment:
+// if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+//   connectDatabaseEmulator(db, "127.0.0.1", 9000);
+// }
+
+/** Canonical list of day keys */
+export const DAYS = [
+  "monday","tuesday","wednesday","thursday","friday","saturday","sunday"
+];
+
+/** Build the initial days schema */
+export const makeDays = () => ({
+  monday: {},
+  tuesday: {},
+  wednesday: {},
+  thursday: {},
+  friday: {},
+  saturday: {},
+  sunday: {}
+});
+
+/**
+ * Creates /instances/<autoId> with { days: {...}, createdAt }.
+ * @param {object} extra Optional fields to merge in.
+ * @returns {Promise<{id:string, data:object}>}
+ */
+export async function createInstance(extra = {}) {
+  const newRef = push(ref(db, "instances")); // client-generated unguessable key
+  const id = newRef.key;
+  const data = { days: makeDays(), createdAt: Date.now(), ...extra };
+  await set(newRef, data);
+  return { id, data };
+}
+
+/**
+ * Loads /instances/<id> and returns the object (or null if missing).
+ * @param {string} id
+ */
+export async function loadInstance(id) {
+  if (!id) return null;
+  const snap = await get(ref(db, `instances/${id}`));
+  return snap.val();
+}
+
+/** Build a shareable URL with ?id=<id> for the current page */
+export function makeShareURL(id) {
+  const u = new URL(location.href);
+  u.searchParams.set("id", id);
+  return u.toString();
+}
+
+/** Normalize a day name (accepts Mon/monday/etc.), returns canonical lowercase or null */
+export function normalizeDay(input) {
+  const k = String(input ?? "").trim().toLowerCase();
+  const map = {
+    mon: "monday", monday: "monday",
+    tue: "tuesday", tues: "tuesday", tuesday: "tuesday",
+    wed: "wednesday", weds: "wednesday", wednesday: "wednesday",
+    thu: "thursday", thur: "thursday", thurs: "thursday", thursday: "thursday",
+    fri: "friday", friday: "friday",
+    sat: "saturday", saturday: "saturday",
+    sun: "sunday", sunday: "sunday"
+  };
+  return map[k] || null;
+}
+
+/** Normalize/validate a color. Accepts "rrggbb" or "#rrggbb"; returns "rrggbb" */
+export function normalizeColor(color) {
+  let c = String(color ?? "").trim();
+  if (c.startsWith("#")) c = c.slice(1);
+  c = c.toLowerCase();
+  if (!/^[0-9a-f]{6}$/.test(c)) {
+    throw new Error("Invalid color; expected 6-digit hex like rrggbb");
+  }
+  return c;
+}
+
+/**
+ * Push an item under /instances/<instanceId>/days/<day>/ with schema
+ * { title: string, color: "rrggbb", position: number }
+ *
+ * @param {string} instanceId
+ * @param {string} day - any of Monday..Sunday (case/abbr OK)
+ * @param {{title?:string,color?:string,position?:number}} item
+ * @returns {Promise<{id:string, data:{title:string,color:string,position:number}}>} new child id & data
+ */
+export async function pushDayItem(instanceId, day, item = {}) {
+  const canonDay = normalizeDay(day);
+  if (!canonDay) throw new Error("Invalid day; use Monday..Sunday");
+
+  const title = String(item.title ?? "");
+  const color = normalizeColor(item.color ?? "000000");
+  const position = Number.isFinite(Number(item.position)) ? Number(item.position) : 0;
+  const square = Boolean(item.square ?? false);
+
+  const path = `instances/${instanceId}/days/${canonDay}`;
+  const childRef = push(ref(db, path));
+  const data = { title, color, position, square };
+  await set(childRef, data);
+  return { id: childRef.key, data };
+}
+
+/**
+ * Sets/overwrites a specific day item by id.
+ * Path: /instances/<instanceId>/days/<day>/<id>
+ * @param {string} instanceId
+ * @param {string} day
+ * @param {string} id
+ * @param {{title?:string,color?:string,position?:number,square?:boolean}} item
+ */
+export async function setDayItem(instanceId, day, id, item = {}) {
+  const canonDay = normalizeDay(day);
+  if (!canonDay) throw new Error("Invalid day; use Monday..Sunday");
+  if (!id) throw new Error("Missing item id");
+
+  const title = String(item.title ?? "");
+  const color = normalizeColor(item.color ?? "000000");
+  const position = Number.isFinite(Number(item.position)) ? Number(item.position) : 0;
+  const square = Boolean(item.square ?? false);
+
+  const data = { title, color, position, square };
+  await set(ref(db, `instances/${instanceId}/days/${canonDay}/${id}`), data);
+}
+
+/**
+ * Removes a specific day item by id.
+ * @param {string} instanceId
+ * @param {string} day
+ * @param {string} id
+ */
+export async function removeDayItem(instanceId, day, id) {
+  const canonDay = normalizeDay(day);
+  if (!canonDay) throw new Error("Invalid day; use Monday..Sunday");
+  if (!id) return;
+  await remove(ref(db, `instances/${instanceId}/days/${canonDay}/${id}`));
+}
