@@ -321,8 +321,12 @@ export function createDragController({
       return;
     }
 
-    if (!canceled && currentDrag.sourceType === 'day-flow') {
-      restoreDetachedBubble();
+    // If drag came from a day-flow and either was canceled or did not drop into
+    // a valid day-flow/trash, restore the element back to its original spot.
+    if (currentDrag.sourceType === 'day-flow') {
+      if (canceled || !target) {
+        restoreDetachedBubble();
+      }
     }
 
     cleanupDragState();
@@ -331,11 +335,15 @@ export function createDragController({
 
   function wireBubble(el) {
     if (!el || el.__dragDestroy) return;
+    const isPrototype = el.classList.contains('prototype');
     const destroy = makeDraggable(el, {
       dataText: el.getAttribute('data-text') || el.textContent || 'Bubble',
       addSyntheticTextFile: true,
       dragCursor: 'grabbing',
       useNativeOnDesktop: false,
+      // For bubbles on the canvas (non-prototypes), drag the actual element
+      // so it visibly detaches and no shadow element is shown.
+      useOriginalAsMirror: !isPrototype,
       onStart: (payload) => handleDragStart(el, payload),
       onMove: ({ x, y }) => handleDragMove(x, y),
       onDrop: ({ x, y, canceled }) => handleDragDrop(x, y, canceled),

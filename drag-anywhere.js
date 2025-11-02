@@ -9,6 +9,11 @@ const defaults = {
   dragImage: null,
   dataText: 'drag-anywhere',
   addSyntheticTextFile: true,
+  // When true, do not create a mirror element.
+  // Instead, temporarily move and position the original element itself.
+  // Useful for cases where the UI should show the real element detaching
+  // from its container during drag (no shadow/ghost element).
+  useOriginalAsMirror: false,
 };
 
 function isTouchCapable() {
@@ -100,6 +105,8 @@ export function makeDraggable(el, options = {}) {
     rect: null,
     mirror: null,
     originalDraggableAttr: el.getAttribute('draggable'),
+    // Track styles we temporarily override when using original as mirror
+    _origInlineStyles: null,
     cleanupFns: [],
   };
 
@@ -119,10 +126,48 @@ export function makeDraggable(el, options = {}) {
     state.startPos = pos;
     state.lastPos = pos;
     state.rect = rectFrom(el);
-    const mirror = opts.dragImage || createMirror(el, state.rect);
-    state.mirror = mirror;
-    document.body.appendChild(mirror);
-    placeMirror(mirror, pos.x, pos.y);
+
+    const useOriginal = !!opts.useOriginalAsMirror;
+    if (useOriginal) {
+      // Preserve a snapshot of inline styles we are about to modify
+      state._origInlineStyles = {
+        position: el.style.position,
+        left: el.style.left,
+        top: el.style.top,
+        width: el.style.width,
+        height: el.style.height,
+        pointerEvents: el.style.pointerEvents,
+        margin: el.style.margin,
+        boxSizing: el.style.boxSizing,
+        transform: el.style.transform,
+        willChange: el.style.willChange,
+        zIndex: el.style.zIndex,
+        opacity: el.style.opacity,
+      };
+      state.mirror = el;
+      // Position the original element as a fixed, non-interactive drag image
+      el.style.position = 'fixed';
+      el.style.left = '0px';
+      el.style.top = '0px';
+      el.style.width = state.rect.width + 'px';
+      el.style.height = state.rect.height + 'px';
+      el.style.pointerEvents = 'none';
+      el.style.margin = '0';
+      el.style.boxSizing = 'border-box';
+      el.style.transform = 'translate(-50%, -50%)';
+      el.style.willChange = 'transform, left, top';
+      el.style.zIndex = '999999';
+      // Do not force opacity here; let caller's styles (e.g. .dragging) control it
+      if (el.parentNode !== document.body) {
+        document.body.appendChild(el);
+      }
+    } else {
+      const mirror = opts.dragImage || createMirror(el, state.rect);
+      state.mirror = mirror;
+      document.body.appendChild(mirror);
+    }
+
+    placeMirror(state.mirror, pos.x, pos.y);
     if (opts.dragCursor) el.style.cursor = opts.dragCursor;
     emit(opts.onStart, { x: pos.x, y: pos.y, rect: state.rect, source, event: ev });
   }
@@ -137,7 +182,27 @@ export function makeDraggable(el, options = {}) {
     const last = state.lastPos || state.startPos || { x: 0, y: 0 };
     emit(opts.onDrop, { x: last.x, y: last.y, rect: state.rect, canceled: !!canceled, source: state.source, event: ev });
     if (state.mirror && state.mirror.parentNode) {
-      state.mirror.parentNode.removeChild(state.mirror);
+      // If we used the original element as the mirror, don't remove it from the DOM.
+      // Instead, restore its inline styles so it can be reinserted normally by the caller.
+      if (opts.useOriginalAsMirror && state.mirror === el) {
+        try {
+          const s = state._origInlineStyles || {};
+          el.style.position = s.position || '';
+          el.style.left = s.left || '';
+          el.style.top = s.top || '';
+          el.style.width = s.width || '';
+          el.style.height = s.height || '';
+          el.style.pointerEvents = s.pointerEvents || '';
+          el.style.margin = s.margin || '';
+          el.style.boxSizing = s.boxSizing || '';
+          el.style.transform = s.transform || '';
+          el.style.willChange = s.willChange || '';
+          el.style.zIndex = s.zIndex || '';
+          el.style.opacity = s.opacity || '';
+        } catch {}
+      } else {
+        state.mirror.parentNode.removeChild(state.mirror);
+      }
     }
     state.mirror = null;
     state.active = false;
@@ -145,6 +210,7 @@ export function makeDraggable(el, options = {}) {
     state.lastPos = null;
     state.rect = null;
     if (opts.dragCursor) el.style.removeProperty('cursor');
+    state._origInlineStyles = null;
   }
 
   function setupNative() {
