@@ -47,9 +47,12 @@ export function createDragController({
   refreshAccordionHeight,
   accordion,
 }) {
+  let canvasDragEnabled = true;
+  let isEditMode = false;
   let addBubbleHandler = null;
   let moveBubbleHandler = null;
   let deleteBubbleHandler = null;
+  let deletePrototypeHandler = null;
   let currentDrag = null;
   let activeDropTarget = null;
   const insertMarkerRef = { current: null };
@@ -183,6 +186,11 @@ export function createDragController({
       cleanupHoverTimer();
     }
 
+    // In edit mode: prototypes can only be dropped into trash, not day-flow
+    if (isEditMode && currentDrag.sourceType === 'prototype' && target && target.classList && target.classList.contains('day-flow')) {
+      target = null;
+    }
+
     setActiveDropTarget(target);
 
     if (trash) {
@@ -194,6 +202,11 @@ export function createDragController({
     }
 
     if (target && target.classList.contains('day-flow')) {
+      if (isEditMode && currentDrag.sourceType === 'prototype') {
+        currentDrag.anchor = null;
+        removeInsertMarker();
+        return;
+      }
       const anchor = findInsertionAnchor(
         target,
         x,
@@ -223,7 +236,7 @@ export function createDragController({
     const data = {
       text: el.getAttribute('data-text') || el.textContent.trim(),
       color: el.getAttribute('data-color') || el.style.backgroundColor || '#38bdf8',
-      square: el.getAttribute('data-square') === 'true',
+      description: el.getAttribute('data-description') || '',
     };
     const parentFlow = el.closest('.day-flow');
     const dayIndexAttr = parentFlow ? parentFlow.getAttribute('data-day-index') : null;
@@ -272,7 +285,7 @@ export function createDragController({
 
     registerRefreshIndex(currentDrag.sourceDayIndex);
 
-    const target = canceled ? null : getDropTargetAt(x, y);
+    let target = canceled ? null : getDropTargetAt(x, y);
 
     if (!canceled && target && target.id === 'trash') {
       if (currentDrag.sourceType === 'day-flow' && currentDrag.sourceElement) {
@@ -285,6 +298,13 @@ export function createDragController({
           }
         } catch {}
         currentDrag.sourceElement.remove();
+      } else if (currentDrag.sourceType === 'prototype' && currentDrag.sourceElement) {
+        try {
+          if (typeof deletePrototypeHandler === 'function') {
+            deletePrototypeHandler({ el: currentDrag.sourceElement });
+          }
+        } catch {}
+        currentDrag.sourceElement.remove();
       }
       cleanupDragState();
       flushRefresh();
@@ -292,6 +312,12 @@ export function createDragController({
     }
 
     if (!canceled && target && target.classList.contains('day-flow')) {
+      if (isEditMode && currentDrag.sourceType === 'prototype') {
+        // Disallow prototype drops onto canvas in edit mode
+        cleanupDragState();
+        flushRefresh();
+        return;
+      }
       const dropDayIndex = Number(target.getAttribute('data-day-index'));
       registerRefreshIndex(dropDayIndex);
 
@@ -311,7 +337,7 @@ export function createDragController({
             dayIndex: dropDayIndex,
             text: currentDrag.data.text,
             color: currentDrag.data.color,
-            square: currentDrag.data.square,
+            description: currentDrag.data.description,
             before: anchor || null,
           });
         }
@@ -355,6 +381,10 @@ export function createDragController({
   function wireBubble(el) {
     if (!el || el.__dragDestroy) return;
     const isPrototype = el.classList.contains('prototype');
+    if (!isPrototype && !canvasDragEnabled) {
+      // Do not wire canvas bubbles when drag is disabled (edit mode)
+      return;
+    }
     const destroy = makeDraggable(el, {
       dataText: el.getAttribute('data-text') || el.textContent || 'Bubble',
       addSyntheticTextFile: true,
@@ -370,8 +400,30 @@ export function createDragController({
     el.__dragDestroy = destroy;
   }
 
+  function setCanvasDragEnabled(enabled) {
+    canvasDragEnabled = !!enabled;
+    const all = document.querySelectorAll('.day-flow .bubble');
+    for (const el of all) {
+      if (el.classList.contains('prototype')) continue;
+      if (canvasDragEnabled) {
+        if (!el.__dragDestroy) {
+          wireBubble(el);
+        }
+      } else {
+        if (el.__dragDestroy) {
+          try { el.__dragDestroy(); } catch {}
+          try { delete el.__dragDestroy; } catch {}
+        }
+      }
+    }
+  }
+
   function setAddBubbleHandler(handler) {
     addBubbleHandler = handler;
+  }
+
+  function setDeletePrototypeHandler(handler) {
+    deletePrototypeHandler = handler;
   }
 
   window.addEventListener('dragover', (ev) => {
@@ -391,5 +443,8 @@ export function createDragController({
     setAddBubbleHandler,
     setMoveBubbleHandler: (handler) => { moveBubbleHandler = handler; },
     setDeleteBubbleHandler: (handler) => { deleteBubbleHandler = handler; },
+    setCanvasDragEnabled,
+    setDeletePrototypeHandler,
+    setEditMode: (on) => { isEditMode = !!on; },
   };
 }

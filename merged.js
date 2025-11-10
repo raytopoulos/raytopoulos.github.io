@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeBtn = document.getElementById('closeSidebar');
   const backdrop = document.getElementById('sidebarBackdrop');
   const addBtn = document.getElementById('addBtn');
+  const editBtn = document.getElementById('editBtn');
   const templates = document.getElementById('templates') || document.querySelector('.bubbles-list');
   const dayFlows = document.querySelectorAll('.day-flow');
   const trashZone = document.getElementById('trash');
@@ -37,6 +38,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('newBubbleForm');
   const cancelBtn = document.getElementById('cancelBtn');
   const bubbleTextInput = document.getElementById('bubbleText');
+  const bubbleDescriptionInput = document.getElementById('bubbleDescription');
+  const bubbleTimeInput = document.getElementById('bubbleTime');
+  const bubbleTimeFormRow = document.getElementById('bubbleTimeFormRow');
 
   function toggleSidebar(open) {
     if (!sidebar || !menuBtn || !backdrop) return;
@@ -84,6 +88,10 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshAccordionHeight: (index) => accordion.refreshHeight(index),
     getCurrentAccordionIndex: () => accordion.getCurrentOpenIndex(),
   });
+  // Allow editing prototypes via bubble-manager
+  if (bubbleManager && typeof bubbleManager.setPrototypeEditHandler === 'function') {
+    bubbleManager.setPrototypeEditHandler((el) => openModal('edit-prototype', el));
+  }
 
   // Instance + persistence wiring using instances.js
   const LS_KEY = 'organizer:instanceId';
@@ -126,8 +134,10 @@ document.addEventListener('DOMContentLoaded', () => {
   function getBubbleDataFromEl(el) {
     const text = el.getAttribute('data-text') || el.textContent || '';
     const color = el.getAttribute('data-color') || '#38bdf8';
-    const square = el.getAttribute('data-square') === 'true';
-    return { title: text, color, square };
+    const insertedAttr = el.getAttribute('data-inserted-at');
+    const insertedAt = insertedAttr != null ? Number(insertedAttr) : undefined;
+    const description = el.getAttribute('data-description') || '';
+    return { title: text, color, insertedAt, description };
   }
 
   async function persistDayPositions(dayIndex) {
@@ -190,13 +200,14 @@ document.addEventListener('DOMContentLoaded', () => {
     await persistDayPositions(fromDayIndex);
   }
 
-  dragController.setAddBubbleHandler(async ({ dayIndex, text, color, square, before }) => {
+  dragController.setAddBubbleHandler(async ({ dayIndex, text, color, description, before }) => {
     try {
-      const el = bubbleManager.addBubbleToDay(dayIndex, text, color, { square, before });
+      const insertedAt = Date.now();
+      const el = bubbleManager.addBubbleToDay(dayIndex, text, color, { before, insertedAt, description });
       const id = await ensureInstanceId();
       const dayName = dayIndexToName(dayIndex);
       if (!dayName) return;
-      const created = await pushDayItem(id, dayName, { title: text, color, square, position: 0 });
+      const created = await pushDayItem(id, dayName, { title: text, color, position: 0, insertedAt, description });
       el.setAttribute('data-id', created.id);
       await persistDayPositions(dayIndex);
     } catch (e) {
@@ -209,24 +220,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
   bubbleManager.renderInitialPrototypes();
 
-  function openModal() {
+  let isEditMode = false;
+  let modalMode = 'create';
+  let editingEl = null;
+
+  function openModal(mode = 'create', el = null) {
     if (!modal) return;
+    modalMode = mode;
+    editingEl = el;
     modal.removeAttribute('hidden');
     form.reset();
+    // Show time field only in edit mode
+    if (bubbleTimeFormRow) {
+      if (mode === 'edit') bubbleTimeFormRow.removeAttribute('hidden');
+      else bubbleTimeFormRow.setAttribute('hidden', '');
+    }
+    if ((mode === 'edit' || mode === 'edit-prototype') && el) {
+      try {
+        const txt = el.getAttribute('data-text') || '';
+        const color = el.getAttribute('data-color') || '#38bdf8';
+        const desc = el.getAttribute('data-description') || '';
+        if (bubbleTextInput) bubbleTextInput.value = txt;
+        if (bubbleDescriptionInput) bubbleDescriptionInput.value = desc;
+        const colorInput = document.querySelector(`input[name="bubbleColor"][value="${color}"]`);
+        if (colorInput) colorInput.checked = true;
+        // Prefill time input only when editing existing instance
+        if (bubbleTimeInput && mode === 'edit') {
+          const ins = Number(el.getAttribute('data-inserted-at'));
+          const ts = Number.isFinite(ins) ? ins : Date.now();
+          const d = new Date(ts);
+          const pad = (n) => String(n).padStart(2, '0');
+          bubbleTimeInput.value = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        }
+      } catch {}
+    }
     if (bubbleTextInput) {
-      bubbleTextInput.focus();
+      setTimeout(() => bubbleTextInput.focus(), 0);
     }
   }
 
   function closeModal() {
     if (!modal) return;
     modal.setAttribute('hidden', '');
+    modalMode = 'create';
+    editingEl = null;
   }
 
   if (addBtn) {
     addBtn.addEventListener('click', () => {
       toggleSidebar(false);
-      openModal();
+      openModal('create');
     });
   }
 
@@ -250,20 +293,198 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Subtle bubble click animation (skip during drag)
+  document.addEventListener('click', (e) => {
+    const bubble = e.target && e.target.closest && e.target.closest('.bubble');
+    if (!bubble) return;
+    if (document.body.classList.contains('is-dragging')) return;
+    try {
+      bubble.classList.remove('pop-anim');
+      // force reflow to restart animation if repeatedly clicked
+      void bubble.offsetWidth;
+      bubble.classList.add('pop-anim');
+      setTimeout(() => bubble.classList.remove('pop-anim'), 220);
+    } catch {}
+  }, true);
+
   if (form) {
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       const text = bubbleTextInput ? bubbleTextInput.value.trim() : '';
       const colorInput = document.querySelector('input[name="bubbleColor"]:checked');
       const color = colorInput ? colorInput.value : '#38bdf8';
-      const square = Boolean(document.getElementById('bubbleSquared')?.checked);
+      const description = bubbleDescriptionInput ? bubbleDescriptionInput.value.trim() : '';
 
       if (!text) return;
 
-      bubbleManager.prependPrototype({ text, color, square });
-      closeModal();
+      if (modalMode === 'edit' && editingEl) {
+        // Update the bubble element
+        try {
+          editingEl.setAttribute('data-text', text);
+          editingEl.setAttribute('data-color', color);
+          editingEl.setAttribute('data-description', description);
+          // Update content label while preserving timestamp span
+          const timeSpan = editingEl.querySelector('.bubble-time');
+          let labelSpan = editingEl.querySelector('.bubble-label');
+          if (!labelSpan) {
+            labelSpan = document.createElement('span');
+            labelSpan.className = 'bubble-label';
+            if (timeSpan) {
+              editingEl.insertBefore(labelSpan, timeSpan);
+            } else {
+              editingEl.appendChild(labelSpan);
+            }
+          }
+          labelSpan.textContent = text;
+          // Apply time change if provided
+          let insertedAtFinal;
+          try {
+            const existing = Number(editingEl.getAttribute('data-inserted-at'));
+            const base = Number.isFinite(existing) ? new Date(existing) : new Date();
+            const t = (bubbleTimeInput && bubbleTimeInput.value || '').trim();
+            if (t) {
+              const parts = t.split(':').map((s) => Number(s));
+              const hh = Number.isFinite(parts[0]) ? parts[0] : base.getHours();
+              const mm = Number.isFinite(parts[1]) ? parts[1] : base.getMinutes();
+              const ss = Number.isFinite(parts[2]) ? parts[2] : 0;
+              base.setHours(hh, mm, ss, 0);
+            }
+            insertedAtFinal = base.getTime();
+            editingEl.setAttribute('data-inserted-at', String(insertedAtFinal));
+            // Update visible time label
+            const pad = (n) => String(n).padStart(2, '0');
+            const hh = pad(base.getHours());
+            const mm = pad(base.getMinutes());
+            const ss = pad(base.getSeconds());
+            let tsSpan = timeSpan;
+            if (!tsSpan) {
+              tsSpan = document.createElement('span');
+              tsSpan.className = 'bubble-time';
+              editingEl.appendChild(tsSpan);
+            }
+            tsSpan.textContent = ` · ${hh}:${mm}:${ss}`;
+          } catch {}
+          // Reapply colors
+          editingEl.style.backgroundColor = color;
+          try {
+            const adjustColor = (hex, percent) => {
+              const safeHex = hex && hex.startsWith('#') ? hex : '#000000';
+              let r = parseInt(safeHex.substring(1, 3), 16);
+              let g = parseInt(safeHex.substring(3, 5), 16);
+              let b = parseInt(safeHex.substring(5, 7), 16);
+              const amount = Math.floor(2.55 * percent);
+              r = Math.min(255, Math.max(0, r + amount));
+              g = Math.min(255, Math.max(0, g + amount));
+              b = Math.min(255, Math.max(0, b + amount));
+              const rr = r.toString(16).padStart(2, '0');
+              const gg = g.toString(16).padStart(2, '0');
+              const bb = b.toString(16).padStart(2, '0');
+              return `#${rr}${gg}${bb}`;
+            };
+            const isLight = (hex) => {
+              if (!hex || !hex.startsWith('#')) return true;
+              const r = parseInt(hex.substring(1, 3), 16);
+              const g = parseInt(hex.substring(3, 5), 16);
+              const b = parseInt(hex.substring(5, 7), 16);
+              const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+              return luminance > 0.6;
+            };
+            editingEl.style.borderColor = adjustColor(color, -20);
+            editingEl.style.color = isLight(color) ? 'var(--text)' : 'white';
+          } catch {}
+
+          // Persist to DB
+          (async () => {
+            const id = await ensureInstanceId();
+            const flow = editingEl.closest('.day-flow');
+            if (!flow) return;
+            const dayIndex = Number(flow.getAttribute('data-day-index'));
+            const dayName = dayIndexToName(dayIndex);
+            if (!dayName) return;
+            const childId = editingEl.getAttribute('data-id');
+            const pos = Array.from(flow.querySelectorAll('.bubble')).indexOf(editingEl);
+            const insertedAttr = editingEl.getAttribute('data-inserted-at');
+            const insertedAt = insertedAttr != null ? Number(insertedAttr) : undefined;
+            await setDayItem(id, dayName, childId, { title: text, color, position: Math.max(0, pos), insertedAt, description });
+          })().catch((e) => console.warn('Failed to save edited bubble', e));
+        } finally {
+          closeModal();
+        }
+      } else {
+        if (modalMode === 'edit-prototype' && editingEl) {
+          // Update prototype element (no time field)
+          try {
+            editingEl.setAttribute('data-text', text);
+            editingEl.setAttribute('data-color', color);
+            editingEl.setAttribute('data-description', description);
+            editingEl.textContent = '';
+            const labelSpan = document.createElement('span');
+            labelSpan.className = 'bubble-label';
+            labelSpan.textContent = text;
+            editingEl.appendChild(labelSpan);
+            // Apply styles
+            editingEl.style.backgroundColor = color;
+            try {
+              const adjustColor = (hex, percent) => {
+                const safeHex = hex && hex.startsWith('#') ? hex : '#000000';
+                let r = parseInt(safeHex.substring(1, 3), 16);
+                let g = parseInt(safeHex.substring(3, 5), 16);
+                let b = parseInt(safeHex.substring(5, 7), 16);
+                const amount = Math.floor(2.55 * percent);
+                r = Math.min(255, Math.max(0, r + amount));
+                g = Math.min(255, Math.max(0, g + amount));
+                b = Math.min(255, Math.max(0, b + amount));
+                const rr = r.toString(16).padStart(2, '0');
+                const gg = g.toString(16).padStart(2, '0');
+                const bb = b.toString(16).padStart(2, '0');
+                return `#${rr}${gg}${bb}`;
+              };
+              const isLight = (hex) => {
+                if (!hex || !hex.startsWith('#')) return true;
+                const r = parseInt(hex.substring(1, 3), 16);
+                const g = parseInt(hex.substring(3, 5), 16);
+                const b = parseInt(hex.substring(5, 7), 16);
+                const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+                return luminance > 0.6;
+              };
+              editingEl.style.borderColor = adjustColor(color, -20);
+              editingEl.style.color = isLight(color) ? 'var(--text)' : 'white';
+            } catch {}
+          } finally {
+            closeModal();
+          }
+        } else {
+          bubbleManager.prependPrototype({ text, color, description });
+          closeModal();
+        }
+      }
     });
   }
+
+  function setEditMode(on) {
+    isEditMode = !!on;
+    document.body.classList.toggle('edit-mode', isEditMode);
+    try { editBtn.setAttribute('aria-pressed', isEditMode ? 'true' : 'false'); } catch {}
+    try { editBtn.textContent = isEditMode ? 'Done' : 'Edit'; } catch {}
+    dragController.setCanvasDragEnabled(!isEditMode);
+    try { dragController.setEditMode(isEditMode); } catch {}
+  }
+
+  if (editBtn) {
+    editBtn.addEventListener('click', () => {
+      setEditMode(!isEditMode);
+    });
+  }
+
+  // While in edit mode, clicking a canvas bubble opens edit modal
+  document.addEventListener('click', (e) => {
+    if (!isEditMode) return;
+    const bubble = e.target && e.target.closest && e.target.closest('.day-flow .bubble');
+    if (bubble) {
+      e.preventDefault();
+      openModal('edit', bubble);
+    }
+  });
   // Load instance (from URL or localStorage) and render saved bubbles
   (async () => {
     const id = await ensureInstanceId();
@@ -272,11 +493,58 @@ document.addEventListener('DOMContentLoaded', () => {
       const days = (snap && snap.days) || {};
       DAYS.forEach((dayName, idx) => {
         const items = days[dayName] || {};
-        const ordered = Object.entries(items).map(([key, val]) => ({ id: key, ...val }))
-          .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0));
+        const entries = Object.entries(items).map(([key, val]) => ({ id: key, ...val }));
+
+        // Determine current DB order by position
+        const byPosition = entries
+          .slice()
+          .sort((a, b) => (Number(a.position) || 0) - (Number(b.position) || 0))
+          .map((e) => e.id);
+
+        // Desired order: by insertedAt (asc), fallback to position
+        const ordered = entries
+          .slice()
+          .sort((a, b) => {
+            const atA = Number(a.insertedAt);
+            const atB = Number(b.insertedAt);
+            const aHas = Number.isFinite(atA);
+            const bHas = Number.isFinite(atB);
+            if (aHas && bHas) {
+              if (atA !== atB) return atA - atB;
+            } else if (aHas !== bHas) {
+              // Items with insertedAt come first
+              return aHas ? -1 : 1;
+            }
+            // Fallback stable ordering by position
+            const pa = Number(a.position) || 0;
+            const pb = Number(b.position) || 0;
+            if (pa !== pb) return pa - pb;
+            // Final tie-breaker by id for stability
+            return a.id.localeCompare(b.id);
+          });
+
+        const byTimestamp = ordered.map((e) => e.id);
+        const alreadySorted = byPosition.length === byTimestamp.length && byPosition.every((idVal, i) => idVal === byTimestamp[i]);
+
+        // Render DOM in timestamp order
         for (const item of ordered) {
-          const el = bubbleManager.addBubbleToDay(idx, item.title || '', `#${item.color || '38bdf8'}`, { square: Boolean(item.square) });
+          const el = bubbleManager.addBubbleToDay(idx, item.title || '', `#${item.color || '38bdf8'}`, { insertedAt: (typeof item.insertedAt !== 'undefined' ? Number(item.insertedAt) : undefined), description: item.description || '' });
           el.setAttribute('data-id', item.id);
+        }
+
+        // If DB is not already in timestamp order, minimally reindex positions
+        if (!alreadySorted) {
+          ordered.forEach((item, position) => {
+            if ((Number(item.position) || 0) !== position) {
+              setDayItem(id, dayName, item.id, {
+                title: item.title || '',
+                color: item.color || '38bdf8',
+                position,
+                insertedAt: Number.isFinite(Number(item.insertedAt)) ? Number(item.insertedAt) : undefined,
+                description: item.description || '',
+              }).catch((e) => console.warn('Failed to reindex item', item.id, e));
+            }
+          });
         }
       });
     } catch (e) {

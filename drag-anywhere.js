@@ -259,9 +259,10 @@ export function makeDraggable(el, options = {}) {
     let initialPointerId = null;
     let hasCapturedPointer = false;
 
+    let downPos = null;
     const onPointerDown = (ev) => {
       if (ev.button && ev.button !== 0) return;
-      ev.preventDefault();
+      // Do not preventDefault here so clicks can fire if no drag starts
       
       // Clear any existing timer
       if (pointerDownTimer) {
@@ -270,6 +271,7 @@ export function makeDraggable(el, options = {}) {
       
       initialPointerId = ev.pointerId;
       const pos = getClientXY(ev);
+      downPos = pos;
       
       try {
         // Capture the pointer immediately to prevent scrolling
@@ -277,24 +279,22 @@ export function makeDraggable(el, options = {}) {
         hasCapturedPointer = true;
       } catch {}
 
-      // For touch devices, add a delay before starting the drag
-      if (ev.pointerType === 'touch') {
-        pointerDownTimer = setTimeout(() => {
-          if (hasCapturedPointer && initialPointerId === ev.pointerId) {
-            beginCommon(pos, 'pointer', ev);
-          }
-        }, 150); // 150ms delay for touch devices
-      } else {
-        // For mouse/pen, start immediately
-        beginCommon(pos, 'pointer', ev);
-      }
+      // Add a short delay before starting drag for all pointers (favor clicks)
+      const delay = ev.pointerType === 'touch' ? 500 : 300;
+      pointerDownTimer = setTimeout(() => {
+        if (hasCapturedPointer && initialPointerId === ev.pointerId) {
+          beginCommon(pos, 'pointer', ev);
+        }
+      }, delay);
     };
 
     const onPointerMove = (ev) => {
-      if (pointerDownTimer && ev.pointerType === 'touch') {
+      if (pointerDownTimer) {
         // If we haven't started dragging yet but moved significantly, cancel the timer
-        const pos = getClientXY(ev);
-        if (Math.abs(ev.movementX) > 5 || Math.abs(ev.movementY) > 5) {
+        const posNow = getClientXY(ev);
+        const dx = (posNow.x - (downPos?.x || posNow.x));
+        const dy = (posNow.y - (downPos?.y || posNow.y));
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
           clearTimeout(pointerDownTimer);
           pointerDownTimer = null;
           if (hasCapturedPointer) {

@@ -97,7 +97,7 @@ export function normalizeColor(color) {
 
 /**
  * Push an item under /instances/<instanceId>/days/<day>/ with schema
- * { title: string, color: "rrggbb", position: number }
+ * { title: string, color: "rrggbb", position: number, square?: boolean, insertedAt?: number, description?: string }
  *
  * @param {string} instanceId
  * @param {string} day - any of Monday..Sunday (case/abbr OK)
@@ -112,10 +112,12 @@ export async function pushDayItem(instanceId, day, item = {}) {
   const color = normalizeColor(item.color ?? "000000");
   const position = Number.isFinite(Number(item.position)) ? Number(item.position) : 0;
   const square = Boolean(item.square ?? false);
+  const insertedAt = Number.isFinite(Number(item.insertedAt)) ? Number(item.insertedAt) : Date.now();
+  const description = String(item.description ?? "");
 
   const path = `instances/${instanceId}/days/${canonDay}`;
   const childRef = push(ref(db, path));
-  const data = { title, color, position, square };
+  const data = { title, color, position, square, insertedAt, description };
   await set(childRef, data);
   return { id: childRef.key, data };
 }
@@ -137,8 +139,11 @@ export async function setDayItem(instanceId, day, id, item = {}) {
   const color = normalizeColor(item.color ?? "000000");
   const position = Number.isFinite(Number(item.position)) ? Number(item.position) : 0;
   const square = Boolean(item.square ?? false);
-
-  const data = { title, color, position, square };
+  // Preserve/allow insertedAt to be set/kept
+  const insertedAt = Number.isFinite(Number(item.insertedAt)) ? Number(item.insertedAt) : undefined;
+  const description = String(item.description ?? "");
+  const base = { title, color, position, square, description };
+  const data = insertedAt != null ? { ...base, insertedAt } : base;
   await set(ref(db, `instances/${instanceId}/days/${canonDay}/${id}`), data);
 }
 

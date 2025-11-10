@@ -1,4 +1,4 @@
-function adjustColor(hex, percent) {
+﻿function adjustColor(hex, percent) {
   const safeHex = hex && hex.startsWith('#') ? hex : '#000000';
   let r = parseInt(safeHex.substring(1, 3), 16);
   let g = parseInt(safeHex.substring(3, 5), 16);
@@ -31,6 +31,7 @@ export function createBubbleManager({
   refreshAccordionHeight,
   getCurrentAccordionIndex,
 }) {
+  let prototypeEditHandler = null;
   const prototypes = [
     { text: 'Task', color: '#38bdf8' },
     { text: 'Idea', color: '#a78bfa' },
@@ -38,19 +39,17 @@ export function createBubbleManager({
     { text: 'Note', color: '#10b981' },
   ];
 
-  function createPrototypeElement({ text, color, square = false }) {
+  function createPrototypeElement({ text, color, square = false, description = '' }) {
     const el = document.createElement('div');
     el.className = 'bubble prototype';
-    if (square) {
-      el.classList.add('squared');
-    }
+    // squared style removed
     // Suppress native drag/copy/long-press actions
     el.setAttribute('draggable', 'false');
     el.setAttribute('role', 'button');
     el.setAttribute('tabindex', '0');
     el.setAttribute('data-text', text);
     el.setAttribute('data-color', color);
-    el.setAttribute('data-square', String(square));
+    el.setAttribute('data-description', description || '');
     el.textContent = text;
     el.style.backgroundColor = color;
     el.style.borderColor = adjustColor(color, -20);
@@ -59,16 +58,30 @@ export function createBubbleManager({
     el.style.webkitUserDrag = 'none';
 
     // Prevent long-press context menu and native drag/copy
-    el.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+    el.addEventListener('touchstart', (e) => {
+      // In edit mode, allow taps to become clicks for editing
+      if (!document.body.classList.contains('edit-mode')) {
+        e.preventDefault();
+      }
+    }, { passive: false });
     el.addEventListener('contextmenu', e => e.preventDefault());
 
     el.addEventListener('click', () => {
-      // No longer add bubbles on click - only support drag and drop
-      const now = (typeof performance !== 'undefined' && performance.now)
-        ? performance.now()
-        : Date.now();
-      if (el.__suppressClickUntil && now < el.__suppressClickUntil) {
-        return;
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (el.__suppressClickUntil && now < el.__suppressClickUntil) return;
+      // While in edit mode, treat small clicks as edit request for prototypes
+      if (typeof prototypeEditHandler === 'function' && document.body.classList.contains('edit-mode')) {
+        prototypeEditHandler(el);
+      }
+    });
+    // Fallback: on quick pointer up (no drag), open edit in edit-mode
+    el.addEventListener('pointerup', () => {
+      const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+      if (el.__suppressClickUntil && now < el.__suppressClickUntil) return;
+      if (document.body.classList.contains('edit-mode') && typeof prototypeEditHandler === 'function') {
+        if (!el.classList.contains('dragging') && !document.body.classList.contains('is-dragging')) {
+          prototypeEditHandler(el);
+        }
       }
     });
 
@@ -76,16 +89,14 @@ export function createBubbleManager({
     return el;
   }
 
-  function addBubbleToDay(dayIndex, text, backgroundColor, { square = false, classes = [], before = null } = {}) {
+  function addBubbleToDay(dayIndex, text, backgroundColor, { square = false, classes = [], before = null, insertedAt, description = '' } = {}) {
     const flows = document.querySelectorAll('.day-flow');
     const flow = flows[dayIndex];
     if (!flow) return null;
 
     const el = document.createElement('div');
     el.className = 'bubble';
-    if (square) {
-      el.classList.add('squared');
-    }
+    // squared style removed
     classes.forEach((cls) => el.classList.add(cls));
 
     el.setAttribute('draggable', 'true');
@@ -93,8 +104,33 @@ export function createBubbleManager({
     el.setAttribute('tabindex', '0');
     el.setAttribute('data-text', text);
     el.setAttribute('data-color', backgroundColor);
-    el.setAttribute('data-square', String(square));
-    el.textContent = text;
+    el.setAttribute('data-description', description || '');
+
+    // Build inner content: label + optional time-of-day
+    const labelSpan = document.createElement('span');
+    labelSpan.className = 'bubble-label';
+    labelSpan.textContent = text;
+
+    el.textContent = '';
+    el.appendChild(labelSpan);
+
+    if (typeof insertedAt !== 'undefined' && insertedAt !== null) {
+      const ts = Number(insertedAt);
+      if (Number.isFinite(ts)) {
+        el.setAttribute('data-inserted-at', String(ts));
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'bubble-time';
+        try {
+          const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          timeSpan.textContent = ' · ' + formatter.format(new Date(ts));
+        } catch {
+          const d = new Date(ts);
+          const pad = (n) => String(n).padStart(2, '0');
+          timeSpan.textContent = ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+        }
+        el.appendChild(timeSpan);
+      }
+    }
     el.style.backgroundColor = backgroundColor;
     el.style.borderColor = adjustColor(backgroundColor, -20);
     el.style.color = isLight(backgroundColor) ? 'var(--text)' : 'white';
@@ -128,6 +164,19 @@ export function createBubbleManager({
       const el = createPrototypeElement(prototype);
       templatesContainer.appendChild(el);
     });
+    // Wire deletion for prototypes when dropped to trash (non-persistent)
+    try {
+      if (dragController && typeof dragController.setDeletePrototypeHandler === 'function') {
+        dragController.setDeletePrototypeHandler(({ el }) => {
+          try {
+            const text = el.getAttribute('data-text');
+            const color = el.getAttribute('data-color');
+            const idx = prototypes.findIndex((p) => p.text === text && p.color === color);
+            if (idx >= 0) prototypes.splice(idx, 1);
+          } catch {}
+        });
+      }
+    } catch {}
   }
 
   return {
@@ -135,5 +184,6 @@ export function createBubbleManager({
     prependPrototype,
     renderInitialPrototypes,
     getPrototypes: () => prototypes.slice(),
+    setPrototypeEditHandler: (handler) => { prototypeEditHandler = handler; },
   };
 }

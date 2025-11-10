@@ -31,6 +31,7 @@
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round"/></svg>
         </button>
         <div class="toolbar-title">Weekly Planner</div>
+        <button id="editBtn" class="edit-btn" aria-pressed="false" aria-label="Toggle edit mode" title="Edit">Edit</button>
       </div>
 
       <div class="week-container">
@@ -147,7 +148,15 @@
       <form id="newBubbleForm">
         <div class="form-row">
           <label for="bubbleText">Bubble text</label>
-          <input id="bubbleText" name="bubbleText" type="text" placeholder="e.g. Idea, Todo, Person�??" required minlength="1" />
+          <input id="bubbleText" name="bubbleText" type="text" placeholder="e.g. Idea, Todo, Person..." required minlength="1" />
+        </div>
+        <div class="form-row">
+          <label for="bubbleDescription">Description</label>
+          <input id="bubbleDescription" name="bubbleDescription" type="text" placeholder="Optional description" />
+        </div>
+        <div class="form-row" id="bubbleTimeFormRow" hidden>
+          <label for="bubbleTime">Time (HH:MM:SS)</label>
+          <input id="bubbleTime" name="bubbleTime" type="time" step="1" />
         </div>
         <div class="form-row">
           <label>Color</label>
@@ -159,12 +168,7 @@
             <input type="radio" id="color-yellow" name="bubbleColor" value="#facc15"><label for="color-yellow" style="background-color: #facc15;" title="Yellow"></label>
           </div>
         </div>
-        <div class="form-row">
-          <div class="checkbox-group">
-            <input type="checkbox" id="bubbleSquared" name="bubbleSquared" value="true">
-            <label for="bubbleSquared">Squared corners</label>
-          </div>
-        </div>
+        
         <div class="modal-actions">
           <button type="button" id="cancelBtn">Cancel</button>
           <button type="submit" id="submitBtn">Create Bubble</button>

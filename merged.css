@@ -98,6 +98,19 @@
       top:0;
       z-index:5;
     }
+    .toolbar .toolbar-title{ margin-right:auto; }
+    .toolbar .edit-btn{
+      margin-left:auto;
+      padding:8px 12px;
+      border:1px solid var(--border);
+      border-radius:8px;
+      background-color:var(--panel-2);
+      cursor:pointer;
+    }
+    body.edit-mode .toolbar .edit-btn{
+      background-color:#fde68a;
+      border-color:#f59e0b;
+    }
     .menu-btn{
       padding:8px 10px;
       background-color:var(--panel-2);
@@ -212,7 +225,7 @@
       white-space:nowrap;
       text-overflow:ellipsis;
       box-shadow:0 1px 3px rgba(0,0,0,.05);
-      transition:opacity .2s, transform .2s;
+      transition:opacity .2s, transform .2s, box-shadow .15s, filter .15s;
       width: 100%; /* Important for vertical stacking to fill container */
       touch-action:none; /* Ensure pointer events during drag on mobile */
       user-select:none;              /* Prevent text selection while initiating drag */
@@ -222,10 +235,7 @@
     .bubble.prototype{
         width: auto; /* Prototypes should not be full width */
     }
-    .bubble.squared{
-      border-radius:6px;
-    }
-    .bubble:focus-visible{
+        .bubble:focus-visible{
       outline:3px solid var(--ring);
       outline-offset:2px;
     }
@@ -234,6 +244,32 @@
     }
     .bubble.dragging{
       opacity:.5;
+    }
+    /* Subtle click pop animation */
+    @keyframes bubble-pop {
+      0% { transform: scale(1); }
+      50% { transform: scale(1.03); }
+      100% { transform: scale(1); }
+    }
+    .bubble.pop-anim{
+      animation: bubble-pop .18s ease-out;
+    }
+    /* In edit mode, make bubbles look non-draggable and clickable */
+    body.edit-mode .day-flow .bubble{
+      cursor: pointer;
+    }
+    body.edit-mode .day-flow .bubble:hover{
+      box-shadow:0 0 0 3px var(--ring), 0 2px 6px rgba(0,0,0,.08);
+      filter:brightness(1.04);
+      transform: translateY(-1px);
+    }
+
+    /* Inline timestamp after label */
+    .bubble .bubble-time{
+      margin-left:8px;
+      opacity:.8;
+      font-weight:500;
+      font-size:12px;
     }
 
     /* Trash Zone */
@@ -445,11 +481,13 @@
       box-shadow:0 8px 32px rgba(0,0,0,.2);
       width:90%;
       max-width:400px;
-      transform:translateY(20px);
-      transition:transform .3s ease;
+      opacity:0;
+      transform:translateY(12px) scale(.98);
+      transition:transform .2s ease, opacity .2s ease;
     }
     .modal:not([hidden]) .dialog{
-      transform:translateY(0);
+      opacity:1;
+      transform:translateY(0) scale(1);
     }
     .dialog h2{
       margin-top:0;
@@ -467,7 +505,8 @@
       margin-bottom:4px;
       font-size:14px;
     }
-    .form-row input[type="text"]{
+    .form-row input[type="text"],
+    .form-row input[type="time"]{
       width:100%;
       padding:8px 12px;
       border:1px solid var(--border);
@@ -475,7 +514,8 @@
       background-color:var(--panel-2);
       font-size:16px;
     }
-    .form-row input[type="text"]:focus{
+    .form-row input[type="text"]:focus,
+    .form-row input[type="time"]:focus{
       outline:2px solid var(--accent);
       outline-offset:0;
       border-color:transparent;
@@ -569,3 +609,4 @@
     .is-dragging {
       overscroll-behavior: contain;
     }
+
