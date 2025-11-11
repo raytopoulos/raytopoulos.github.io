@@ -299,12 +299,15 @@ export function createDragController({
         } catch {}
         currentDrag.sourceElement.remove();
       } else if (currentDrag.sourceType === 'prototype' && currentDrag.sourceElement) {
-        try {
-          if (typeof deletePrototypeHandler === 'function') {
-            deletePrototypeHandler({ el: currentDrag.sourceElement });
-          }
-        } catch {}
-        currentDrag.sourceElement.remove();
+        // Only allow deleting prototypes (sidebar items) in edit mode
+        if (isEditMode) {
+          try {
+            if (typeof deletePrototypeHandler === 'function') {
+              deletePrototypeHandler({ el: currentDrag.sourceElement });
+            }
+          } catch {}
+          currentDrag.sourceElement.remove();
+        }
       }
       cleanupDragState();
       flushRefresh();
