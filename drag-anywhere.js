@@ -279,13 +279,21 @@ export function makeDraggable(el, options = {}) {
         hasCapturedPointer = true;
       } catch {}
 
-      // Add a short delay before starting drag for all pointers (favor clicks)
-      const delay = ev.pointerType === 'touch' ? 500 : 300;
-      pointerDownTimer = setTimeout(() => {
-        if (hasCapturedPointer && initialPointerId === ev.pointerId) {
-          beginCommon(pos, 'pointer', ev);
-        }
-      }, delay);
+      // Desktop should start immediately; delay only on touch or in edit mode
+      let isEditMode = false;
+      try { isEditMode = !!(document && document.body && document.body.classList && document.body.classList.contains('edit-mode')); } catch {}
+      const isTouch = ev.pointerType === 'touch';
+      const shouldDelay = isTouch || isEditMode;
+      if (shouldDelay) {
+        const delay = isTouch ? 500 : 200;
+        pointerDownTimer = setTimeout(() => {
+          if (hasCapturedPointer && initialPointerId === ev.pointerId) {
+            beginCommon(pos, 'pointer', ev);
+          }
+        }, delay);
+      } else {
+        beginCommon(pos, 'pointer', ev);
+      }
     };
 
     const onPointerMove = (ev) => {
