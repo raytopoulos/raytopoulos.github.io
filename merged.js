@@ -43,11 +43,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const bubbleTimeFormRow = document.getElementById('bubbleTimeFormRow');
   const colorGroup = document.querySelector('.color-swatch-group');
   const addColorBtn = document.getElementById('addColorBtn');
-  const customColorPicker = document.getElementById('customColorPicker');
+  let recordColorUsage = () => {};
+  let sortSwatchesByUsage = () => {};
 
   // Custom color FIFO history for modal color swatches
   (function setupCustomColorPicker(){
-    if (!colorGroup || !addColorBtn || !customColorPicker) return;
+    if (!colorGroup || !addColorBtn) return;
 
     function parsePx(v){
       const n = parseFloat(String(v||''));
@@ -77,8 +78,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function findSwatchByValue(val){
-      const norm = (val||'').trim().toLowerCase();
-      return getAllSwatches().find(i => (i.value||'').trim().toLowerCase() === norm) || null;
+      const norm = normalizeHex(val);
+      if (!norm) return null;
+      return getAllSwatches().find((i) => normalizeHex(i.value) === norm) || null;
     }
 
     function normalizeHex(hex){
@@ -94,6 +96,63 @@ document.addEventListener('DOMContentLoaded', () => {
       } catch {}
       return null;
     }
+
+    const COLOR_STATS_KEY = 'organizer:colorStats';
+    let colorStats = loadColorStats();
+
+    function loadColorStats(){
+      try {
+        const raw = localStorage.getItem(COLOR_STATS_KEY);
+        if (!raw) return {};
+        const data = JSON.parse(raw);
+        return (data && typeof data === 'object') ? data : {};
+      } catch {
+        return {};
+      }
+    }
+
+    function saveColorStats(){
+      try {
+        localStorage.setItem(COLOR_STATS_KEY, JSON.stringify(colorStats));
+      } catch {}
+    }
+
+    function ensureSwatchMetadata(radio, fallbackCreatedAt = Date.now()){
+      if (!radio) return null;
+      const value = normalizeHex(radio.value || radio.getAttribute('data-color'));
+      if (!value) return null;
+      radio.value = value;
+      let stats = colorStats[value];
+      let dirty = false;
+      if (!stats) {
+        stats = { useCount: 0, lastUsed: 0, createdAt: fallbackCreatedAt };
+        colorStats[value] = stats;
+        dirty = true;
+      } else {
+        if (!stats.createdAt) {
+          stats.createdAt = fallbackCreatedAt;
+          dirty = true;
+        }
+        if (typeof stats.useCount !== 'number') { stats.useCount = 0; dirty = true; }
+        if (typeof stats.lastUsed !== 'number') { stats.lastUsed = 0; dirty = true; }
+      }
+      radio.dataset.createdAt = stats.createdAt;
+      radio.dataset.useCount = stats.useCount;
+      radio.dataset.lastUsed = stats.lastUsed;
+      if (dirty) saveColorStats();
+      return { value, stats };
+    }
+
+    function getLabelForRadio(radio){
+      if (!radio) return null;
+      return colorGroup.querySelector(`label[for="${escCssIdent(radio.id)}"]`);
+    }
+
+    const initialSwatches = getAllSwatches();
+    const baseCreatedAt = Date.now() - initialSwatches.length;
+    initialSwatches.forEach((radio, idx) => {
+      ensureSwatchMetadata(radio, baseCreatedAt + idx);
+    });
 
     function addCustomSwatch(hex){
       const value = normalizeHex(hex);
@@ -114,21 +173,23 @@ document.addEventListener('DOMContentLoaded', () => {
       radio.id = id;
       radio.value = value;
       radio.setAttribute('data-custom', 'true');
-      radio.setAttribute('data-created-at', String(Date.now()));
 
       const label = document.createElement('label');
       label.setAttribute('for', id);
       label.title = value;
       label.style.backgroundColor = value;
 
+      // Ensure metadata/stats
+      ensureSwatchMetadata(radio);
+      saveColorStats();
+
       // Insert before the + button
+      colorGroup.insertBefore(radio, addColorBtn);
       colorGroup.insertBefore(label, addColorBtn);
-      colorGroup.insertBefore(radio, label);
 
       // Select the new color
       try { radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); } catch {}
 
-      // Enforce capacity (FIFO over custom swatches only)
       enforceCapacity();
     }
 
@@ -143,69 +204,346 @@ document.addEventListener('DOMContentLoaded', () => {
     function enforceCapacity(){
       const capacity = computeCapacity();
       const radios = getAllSwatches();
-      if (radios.length <= capacity) return;
-      // Remove oldest custom swatches until we fit
-      const customs = radios.filter(r => r.hasAttribute('data-custom'))
-        .sort((a,b) => Number(a.getAttribute('data-created-at')) - Number(b.getAttribute('data-created-at')));
-      while (getAllSwatches().length > capacity && customs.length) {
-        const r = customs.shift();
-        if (!r) break;
-        // Avoid removing the currently checked swatch; if so, skip and take next
-        if (r.checked && customs.length) continue;
-        const lab = colorGroup.querySelector(`label[for="${escCssIdent(r.id)}"]`);
-        try { r.remove(); } catch {}
-        if (lab) { try { lab.remove(); } catch {} }
-      }
-    }
-
-    function showPickerNearButton(){
-      try {
-        const rect = addColorBtn.getBoundingClientRect();
-        customColorPicker.classList.remove('sr-only-color-picker');
-        Object.assign(customColorPicker.style, {
-          position: 'fixed',
-          left: Math.max(8, Math.min(window.innerWidth - 40, rect.left)) + 'px',
-          top: Math.max(8, Math.min(window.innerHeight - 40, rect.bottom + 8)) + 'px',
-          width: '32px',
-          height: '32px',
-          opacity: '0',
-          pointerEvents: 'auto',
-          zIndex: '999999',
+      const excess = Math.max(0, radios.length - capacity);
+      if (excess <= 0) return;
+      const ranked = radios
+        .map((radio) => ({
+          radio,
+          label: getLabelForRadio(radio),
+          useCount: Number(radio.dataset.useCount) || 0,
+          lastUsed: Number(radio.dataset.lastUsed) || 0,
+          createdAt: Number(radio.dataset.createdAt) || 0,
+        }))
+        .sort((a, b) => {
+          if (a.useCount !== b.useCount) return a.useCount - b.useCount;
+          if (a.lastUsed !== b.lastUsed) return a.lastUsed - b.lastUsed;
+          return a.createdAt - b.createdAt;
         });
-        if (customColorPicker.showPicker) {
-          customColorPicker.showPicker();
-        } else {
-          customColorPicker.focus();
-          customColorPicker.click();
+      for (let i = 0; i < excess; i++) {
+        const target = ranked[i];
+        if (!target) break;
+        const { radio, label } = target;
+        const value = normalizeHex(radio.value);
+        try { radio.remove(); } catch {}
+        if (label) { try { label.remove(); } catch {} }
+        if (value && colorStats[value]) {
+          delete colorStats[value];
         }
-      } catch {
-        try { customColorPicker.click(); } catch {}
       }
+      saveColorStats();
     }
 
-    function hidePicker(){
-      try {
-        customColorPicker.classList.add('sr-only-color-picker');
-        customColorPicker.removeAttribute('style');
-      } catch {}
+    function sortSwatchesByUsageInternal(){
+      if (!addColorBtn) return;
+      const radios = getAllSwatches();
+      const entries = radios.map((radio) => ({
+        radio,
+        label: getLabelForRadio(radio),
+        useCount: Number(radio.dataset.useCount) || 0,
+        lastUsed: Number(radio.dataset.lastUsed) || 0,
+        createdAt: Number(radio.dataset.createdAt) || 0,
+      }));
+      entries.sort((a, b) => {
+        if (a.useCount !== b.useCount) return a.useCount - b.useCount;
+        if (a.lastUsed !== b.lastUsed) return a.lastUsed - b.lastUsed;
+        return a.createdAt - b.createdAt;
+      });
+      entries.forEach(({ radio, label }) => {
+        colorGroup.insertBefore(radio, addColorBtn);
+        if (label) colorGroup.insertBefore(label, addColorBtn);
+      });
+    }
+
+    function recordColorUsageInternal(hex){
+      const value = normalizeHex(hex);
+      if (!value) return;
+      let radio = findSwatchByValue(value);
+      if (!radio) {
+        addCustomSwatch(value);
+        radio = findSwatchByValue(value);
+        if (!radio) return;
+      }
+      const info = ensureSwatchMetadata(radio);
+      if (!info) return;
+      info.stats.useCount = (info.stats.useCount || 0) + 1;
+      info.stats.lastUsed = Date.now();
+      radio.dataset.useCount = info.stats.useCount;
+      radio.dataset.lastUsed = info.stats.lastUsed;
+      saveColorStats();
+    }
+
+    // Simple confirm popover management
+    let confirmEl = null;
+    let pendingHex = null;
+    let docClickHandler = null;
+    let docKeyHandler = null;
+    let pointerDownInside = false;
+    let pointerDownHandlerRef = null;
+    let pointerUpHandlerRef = null;
+    let pickerCleanupFns = [];
+    let resizeHandlerRef = null;
+
+    function placeConfirm() {
+      if (!confirmEl) return;
+      const rect = addColorBtn.getBoundingClientRect();
+      const w = confirmEl.offsetWidth || 220;
+      const h = confirmEl.offsetHeight || 44;
+      const left = Math.max(8, Math.min(window.innerWidth - w - 8, rect.left - 4));
+      // Prefer placing above the color button to avoid overlapping native picker
+      const aboveTop = rect.top - h - 8;
+      const canPlaceAbove = aboveTop >= 8;
+      const belowTop = rect.bottom + 8;
+      const top = canPlaceAbove ? aboveTop : Math.max(8, Math.min(window.innerHeight - h - 8, belowTop));
+      confirmEl.style.left = left + 'px';
+      confirmEl.style.top = top + 'px';
+    }
+
+    function hideConfirm(){
+      if (confirmEl && confirmEl.parentNode) {
+        try { confirmEl.parentNode.removeChild(confirmEl); } catch {}
+      }
+      confirmEl = null;
+      pendingHex = null;
+      if (pickerCleanupFns.length) {
+        pickerCleanupFns.forEach((fn) => { try { fn(); } catch {} });
+        pickerCleanupFns = [];
+      }
+      pointerDownInside = false;
+      if (resizeHandlerRef) {
+        window.removeEventListener('resize', resizeHandlerRef);
+        resizeHandlerRef = null;
+      }
+      if (docClickHandler) { try { document.removeEventListener('click', docClickHandler, true); } catch {} docClickHandler = null; }
+      if (docKeyHandler) { try { document.removeEventListener('keydown', docKeyHandler, true); } catch {} docKeyHandler = null; }
+    }
+
+    function showConfirm(hex){
+      pendingHex = hex;
+      if (!confirmEl) {
+        confirmEl = document.createElement('div');
+        confirmEl.className = 'color-confirm-popover';
+        confirmEl.innerHTML = `
+          <div class="preview"></div>
+          <div class="picker-inline">
+            <div class="sv-plane"><div class="sv-thumb"></div></div>
+            <div class="hue-bar"><div class="hue-thumb"></div></div>
+          </div>
+          <input type="text" class="hex" aria-label="Hex color" />
+          <div class="actions">
+            <button type="button" class="primary ok">OK</button>
+            <button type="button" class="cancel">Cancel</button>
+          </div>
+        `;
+        document.body.appendChild(confirmEl);
+        const currentConfirm = confirmEl;
+        pickerCleanupFns = [];
+        pointerDownHandlerRef = () => { pointerDownInside = true; };
+        pointerUpHandlerRef = () => {
+          setTimeout(() => { pointerDownInside = false; }, 60);
+        };
+        currentConfirm.addEventListener('pointerdown', pointerDownHandlerRef);
+        window.addEventListener('pointerup', pointerUpHandlerRef, true);
+        pickerCleanupFns.push(() => {
+          if (pointerDownHandlerRef && currentConfirm) {
+            currentConfirm.removeEventListener('pointerdown', pointerDownHandlerRef);
+          }
+          if (pointerUpHandlerRef) {
+            window.removeEventListener('pointerup', pointerUpHandlerRef, true);
+          }
+          pointerDownHandlerRef = null;
+          pointerUpHandlerRef = null;
+        });
+        const ok = confirmEl.querySelector('.ok');
+        const cancel = confirmEl.querySelector('.cancel');
+        const pickerInline = confirmEl.querySelector('.picker-inline');
+        const svPlane = confirmEl.querySelector('.sv-plane');
+        const svThumb = confirmEl.querySelector('.sv-thumb');
+        const hueBar = confirmEl.querySelector('.hue-bar');
+        const hueThumb = confirmEl.querySelector('.hue-thumb');
+        const inputHex = confirmEl.querySelector('.hex');
+        const preview = confirmEl.querySelector('.preview');
+        // HSV utilities
+        function clamp(n, min, max){ return Math.min(max, Math.max(min, n)); }
+        function hsvToRgb(h, s, v){
+          h = (h % 360 + 360) % 360; s = clamp(s,0,1); v = clamp(v,0,1);
+          const c = v * s;
+          const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+          const m = v - c;
+          let r=0,g=0,b=0;
+          if (h < 60) { r=c; g=x; b=0; }
+          else if (h < 120) { r=x; g=c; b=0; }
+          else if (h < 180) { r=0; g=c; b=x; }
+          else if (h < 240) { r=0; g=x; b=c; }
+          else if (h < 300) { r=x; g=0; b=c; }
+          else { r=c; g=0; b=x; }
+          return { r: Math.round((r+m)*255), g: Math.round((g+m)*255), b: Math.round((b+m)*255) };
+        }
+        function rgbToHex(r,g,b){
+          const toHex = (n) => n.toString(16).padStart(2,'0');
+          return '#' + toHex(r) + toHex(g) + toHex(b);
+        }
+        function hsvToHex(h,s,v){ const {r,g,b} = hsvToRgb(h,s,v); return rgbToHex(r,g,b); }
+        function hexToRgb(hex){
+          let h = (hex||'').trim();
+          if (!h) return null;
+          if (h[0] !== '#') h = '#'+h;
+          if (h.length === 4) h = '#'+h[1]+h[1]+h[2]+h[2]+h[3]+h[3];
+          const m = /^#([0-9a-fA-F]{6})$/.exec(h);
+          if (!m) return null;
+          const x = parseInt(m[1],16);
+          return { r:(x>>16)&255, g:(x>>8)&255, b:x&255 };
+        }
+        function rgbToHsv(r,g,b){
+          r/=255; g/=255; b/=255;
+          const max = Math.max(r,g,b), min = Math.min(r,g,b);
+          const d = max - min;
+          let h;
+          if (d === 0) h = 0;
+          else if (max === r) h = 60 * (((g-b)/d) % 6);
+          else if (max === g) h = 60 * (((b-r)/d) + 2);
+          else h = 60 * (((r-g)/d) + 4);
+          if (h < 0) h += 360;
+          const s = max === 0 ? 0 : d / max;
+          const v = max;
+          return { h, s, v };
+        }
+
+        // State
+        let H = 0, S = 1, V = 1;
+
+        function setSVBackground(){
+          svPlane.style.background = `linear-gradient(to right, #fff, rgba(255,255,255,0)), linear-gradient(to top, #000, rgba(0,0,0,0)), hsl(${H}, 100%, 50%)`;
+        }
+        function positionThumbs(){
+          const rectSV = svPlane.getBoundingClientRect();
+          const x = clamp(S,0,1) * rectSV.width;
+          const y = (1 - clamp(V,0,1)) * rectSV.height;
+          svThumb.style.left = `${x}px`;
+          svThumb.style.top = `${y}px`;
+          const rectHue = hueBar.getBoundingClientRect();
+          const hx = (H/360) * rectHue.width;
+          hueThumb.style.left = `${hx}px`;
+        }
+        function updateAllFromHSV(){
+          setSVBackground();
+          positionThumbs();
+          const hexNow = hsvToHex(H,S,V);
+          inputHex.value = hexNow;
+          preview.style.backgroundColor = hexNow;
+        }
+        function updateHSVFromHex(hex){
+          const rgb = hexToRgb(hex);
+          if (!rgb) return;
+          const hsv = rgbToHsv(rgb.r, rgb.g, rgb.b);
+          H = hsv.h; S = hsv.s; V = hsv.v;
+          updateAllFromHSV();
+        }
+        // Initialize from pendingHex
+        updateHSVFromHex(pendingHex);
+
+        function svPointer(e){
+          const rect = svPlane.getBoundingClientRect();
+          const px = clamp((e.clientX - rect.left)/rect.width, 0, 1);
+          const py = clamp((e.clientY - rect.top)/rect.height, 0, 1);
+          S = px; V = 1 - py; updateAllFromHSV();
+        }
+        function huePointer(e){
+          const rect = hueBar.getBoundingClientRect();
+          const px = clamp((e.clientX - rect.left)/rect.width, 0, 1);
+          H = px * 360; updateAllFromHSV();
+        }
+        function bindDrag(el, onMove){
+          let down = false;
+          const handleMouseDown = (ev) => { down = true; onMove(ev); ev.preventDefault(); };
+          const handleMouseMove = (ev) => { if (!down) return; onMove(ev); ev.preventDefault(); };
+          const handleMouseUp = () => { down = false; };
+          const handleTouchStart = (ev) => {
+            down = true;
+            const t = ev.touches[0];
+            onMove({ clientX: t.clientX, clientY: t.clientY });
+            ev.preventDefault();
+          };
+          const handleTouchMove = (ev) => {
+            if (!down) return;
+            const t = ev.touches[0];
+            onMove({ clientX: t.clientX, clientY: t.clientY });
+            ev.preventDefault();
+          };
+          const handleTouchEnd = () => { down = false; };
+          el.addEventListener('mousedown', handleMouseDown);
+          window.addEventListener('mousemove', handleMouseMove);
+          window.addEventListener('mouseup', handleMouseUp);
+          el.addEventListener('touchstart', handleTouchStart, { passive: false });
+          window.addEventListener('touchmove', handleTouchMove, { passive: false });
+          window.addEventListener('touchend', handleTouchEnd);
+          window.addEventListener('touchcancel', handleTouchEnd);
+          pickerCleanupFns.push(() => {
+            el.removeEventListener('mousedown', handleMouseDown);
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+            el.removeEventListener('touchstart', handleTouchStart);
+            window.removeEventListener('touchmove', handleTouchMove);
+            window.removeEventListener('touchend', handleTouchEnd);
+            window.removeEventListener('touchcancel', handleTouchEnd);
+          });
+        }
+        bindDrag(svPlane, svPointer);
+        bindDrag(hueBar, huePointer);
+
+        const updatePreview = (val) => {
+          const v = (val || '').trim();
+          const norm = v.startsWith('#') ? v : ('#' + v);
+          inputHex.value = norm;
+          preview.style.backgroundColor = norm;
+          updateHSVFromHex(norm);
+        };
+        ok.addEventListener('click', () => {
+          const val = inputHex.value.trim();
+          addCustomSwatch(val);
+          hideConfirm();
+        });
+        cancel.addEventListener('click', hideConfirm);
+        inputHex.addEventListener('input', () => { updatePreview(inputHex.value); });
+        docClickHandler = (e) => {
+          if (!confirmEl) return;
+          if (confirmEl.contains(e.target) || addColorBtn.contains(e.target)) return;
+          if (pointerDownInside) return;
+          hideConfirm();
+        };
+        docKeyHandler = (e) => {
+          if (e.key === 'Escape') hideConfirm();
+        };
+        document.addEventListener('click', docClickHandler, true);
+        document.addEventListener('keydown', docKeyHandler, true);
+        resizeHandlerRef = () => placeConfirm();
+        window.addEventListener('resize', resizeHandlerRef);
+        setTimeout(placeConfirm, 0);
+      } else {
+        const inputHex = confirmEl.querySelector('.hex');
+        const preview = confirmEl.querySelector('.preview');
+        if (inputHex && preview) {
+          inputHex.value = hex;
+          preview.style.backgroundColor = hex;
+        }
+        setTimeout(placeConfirm, 0);
+      }
     }
 
     addColorBtn.addEventListener('click', () => {
-      showPickerNearButton();
+      const selected = (colorGroup.querySelector('input[name="bubbleColor"]:checked') || {}).value || '#38bdf8';
+      showConfirm(selected);
     });
 
-    function handlePick(){
-      const val = customColorPicker.value;
-      addCustomSwatch(val);
-      hidePicker();
-    }
-    customColorPicker.addEventListener('input', handlePick);
-    customColorPicker.addEventListener('change', handlePick);
+    // No external floating color picker; selection happens inside the confirm popover.
 
     // Recompute capacity on resize
     window.addEventListener('resize', () => {
       enforceCapacity();
+      placeConfirm();
     });
+
+    recordColorUsage = recordColorUsageInternal;
+    sortSwatchesByUsage = sortSwatchesByUsageInternal;
   })();
 
   function toggleSidebar(open) {
@@ -392,6 +730,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function openModal(mode = 'create', el = null) {
     if (!modal) return;
+    if (mode === 'create') {
+      try { sortSwatchesByUsage(); } catch {}
+    }
     modalMode = mode;
     editingEl = el;
     modal.removeAttribute('hidden');
@@ -618,10 +959,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch {}
           } finally {
             closeModal();
+            recordColorUsage(color);
           }
         } else {
           bubbleManager.prependPrototype({ text, color, description });
           closeModal();
+          recordColorUsage(color);
         }
       }
     });

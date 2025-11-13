@@ -94,6 +94,8 @@ export function createDragController({
   function autoOpenDay(target) {
     if (!target) return;
     if (window.innerWidth > 768) return;
+    // While editing on mobile, do NOT auto-open when dragging a prototype
+    if (isEditMode && currentDrag && currentDrag.sourceType === 'prototype') return;
     // If we're already planning to open this same target, do nothing
     if (hoverOpenTarget === target) return;
 

@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bubble Snapshot Viewer</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f1f5f9;
+      --card-bg: #ffffff;
+      --border: #e2e8f0;
+      --accent: #0f172a;
+      --muted: #475569;
+      --empty: #cbd5f5;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--accent);
+      min-height: 100vh;
+    }
+
+    .view-shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 16px 64px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .view-header h1 {
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+      margin: 0 0 0.35em;
+    }
+
+    .view-header p {
+      margin: 0;
+      color: var(--muted);
+      max-width: 60ch;
+    }
+
+    .table-card {
+      background: var(--card-bg);
+      border-radius: 20px;
+      padding: 24px;
+      box-shadow: 0 25px 80px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(15, 23, 42, 0.05);
+    }
+
+    .status {
+      margin-bottom: 16px;
+      padding: 12px 16px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.05);
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .status[hidden] {
+      display: none;
+    }
+
+    .table-wrapper {
+      overflow-x: auto;
+    }
+
+    .timeline-table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 720px;
+      font-size: 0.95rem;
+    }
+
+    .timeline-table th,
+    .timeline-table td {
+      border: 1px solid var(--border);
+      padding: 12px;
+      vertical-align: top;
+      background: #fff;
+    }
+
+    .timeline-table thead th {
+      background: #f8fafc;
+      text-transform: uppercase;
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .timeline-table tbody th {
+      background: #f8fafc;
+      font-size: 0.95rem;
+      width: 100px;
+    }
+
+    .timeline-table td {
+      min-width: 120px;
+      height: 100px;
+    }
+
+    .timeline-table td.empty {
+      background: #f8fafc;
+    }
+
+    .empty-row {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      background: #f8fafc;
+    }
+
+    .bubble-rect {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+      padding: 12px 14px;
+      border-radius: 16px;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+      border: 1px solid rgba(15, 23, 42, 0.08);
+      font-weight: 600;
+      background: var(--bubble-color, #38bdf8);
+      color: var(--bubble-text, #0f172a);
+      transition: transform 150ms ease, box-shadow 150ms ease;
+    }
+
+    .bubble-rect + .bubble-rect {
+      margin-top: 8px;
+    }
+
+    .bubble-rect:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.25);
+    }
+
+    .bubble-title {
+      font-size: 1rem;
+    }
+
+    .bubble-description {
+      font-size: 0.85rem;
+      font-weight: 500;
+      opacity: 0.9;
+    }
+
+    @media (max-width: 768px) {
+      .timeline-table {
+        min-width: 640px;
+      }
+
+      .timeline-table tbody th {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="view-shell">
+    <header class="view-header">
+      <h1>Weekly Bubble Snapshot</h1>
+      <p>Read-only table view of saved bubbles. Append <code>?id=&lt;instance-id&gt;</code> to the URL to show a specific board. Rows are unique timestamps (earliest -> latest); columns are days.</p>
+    </header>
+
+    <section class="table-card" aria-live="polite">
+      <div id="status" class="status" role="status">Waiting for an instance id...</div>
+      <div class="table-wrapper">
+        <table class="timeline-table" role="grid">
+          <thead>
+            <tr id="tableHeadRow">
+              <th scope="col">Time</th>
+            </tr>
+          </thead>
+          <tbody id="timelineBody">
+            <tr>
+              <td class="empty-row" colspan="8">Provide an instance id to load data.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script type="module">
+    import { loadInstance, DAYS } from '../instances.js';
+
+    const DAY_LABELS = {
+      monday: 'Monday',
+      tuesday: 'Tuesday',
+      wednesday: 'Wednesday',
+      thursday: 'Thursday',
+      friday: 'Friday',
+      saturday: 'Saturday',
+      sunday: 'Sunday',
+    };
+
+    const statusEl = document.getElementById('status');
+    const tableHeadRow = document.getElementById('tableHeadRow');
+    const tableBody = document.getElementById('timelineBody');
+
+    DAYS.forEach((day) => {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = DAY_LABELS[day] || day;
+      tableHeadRow.appendChild(th);
+    });
+
+    const params = new URLSearchParams(window.location.search);
+    const instanceId = (params.get('id') || '').trim();
+
+    if (!instanceId) {
+      setStatus('Add ?id=<instance-id> to the URL to render a saved board.', 'info');
+    } else {
+      setStatus('Loading...', 'info');
+      bootstrap(instanceId);
+    }
+
+    async function bootstrap(id) {
+      clearTable('Loading timeline...');
+      try {
+        const snap = await loadInstance(id);
+        if (!snap || !snap.days) {
+          setStatus('Instance not found or has no data.', 'error');
+          clearTable('No data for this instance.');
+          return;
+        }
+        const rows = groupByTimestamp(snap.days);
+        if (!rows.length) {
+          setStatus('No bubbles found for this instance.', 'info');
+          clearTable('No bubbles positioned yet.');
+          return;
+        }
+        renderRows(rows);
+        setStatus(`Viewing instance ${id}`, 'success');
+      } catch (err) {
+        console.error('Failed to load instance', err);
+        setStatus('Unable to load data. Check the console for details.', 'error');
+        clearTable('Error loading data.');
+      }
+    }
+
+    function groupByTimestamp(days) {
+      const rowMap = new Map();
+
+      for (const day of DAYS) {
+        const entries = extractItems(days[day]);
+        for (const item of entries) {
+          const meta = deriveTimeMeta(item);
+          let row = rowMap.get(meta.key);
+          if (!row) {
+            row = { key: meta.key, label: meta.label, sortValue: meta.sortValue, perDay: new Map() };
+            rowMap.set(meta.key, row);
+          }
+          if (!row.perDay.has(day)) {
+            row.perDay.set(day, []);
+          }
+          row.perDay.get(day).push(item);
+        }
+      }
+
+      return Array.from(rowMap.values()).sort((a, b) => {
+        if (a.sortValue === b.sortValue) {
+          return a.label.localeCompare(b.label);
+        }
+        return a.sortValue - b.sortValue;
+      });
+    }
+
+    function extractItems(dayObj = {}) {
+      return Object.entries(dayObj)
+        .map(([id, data]) => ({ id, ...data }))
+        .sort(compareByChronology);
+    }
+
+    function compareByChronology(a, b) {
+      const aTime = Number(a.insertedAt);
+      const bTime = Number(b.insertedAt);
+      const aHas = Number.isFinite(aTime);
+      const bHas = Number.isFinite(bTime);
+      if (aHas && bHas && aTime !== bTime) {
+        return aTime - bTime;
+      }
+      if (aHas !== bHas) {
+        return aHas ? -1 : 1;
+      }
+      const aPos = Number(a.position) || 0;
+      const bPos = Number(b.position) || 0;
+      return aPos - bPos;
+    }
+
+    function deriveTimeMeta(item) {
+      const inserted = Number(item.insertedAt);
+      if (Number.isFinite(inserted)) {
+        const d = new Date(inserted);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        const label = Number(ss) ? `${hh}:${mm}:${ss}` : `${hh}:${mm}`;
+        const sortValue = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+        return { key: `${hh}:${mm}:${ss}`, label, sortValue };
+      }
+      return { key: '__no_time__', label: 'No Time', sortValue: Number.POSITIVE_INFINITY };
+    }
+
+    function renderRows(rows) {
+      tableBody.innerHTML = '';
+      for (const row of rows) {
+        const tr = document.createElement('tr');
+        const timeTh = document.createElement('th');
+        timeTh.scope = 'row';
+        timeTh.textContent = row.label;
+        tr.appendChild(timeTh);
+
+        for (const day of DAYS) {
+          const td = document.createElement('td');
+          td.dataset.day = day;
+          const entries = row.perDay.get(day) || [];
+          if (!entries.length) {
+            td.classList.add('empty');
+          } else {
+            for (const entry of entries) {
+              td.appendChild(renderBubble(entry));
+            }
+          }
+          tr.appendChild(td);
+        }
+        tableBody.appendChild(tr);
+      }
+    }
+
+    function renderBubble(item) {
+      const article = document.createElement('article');
+      article.className = 'bubble-rect';
+      const color = normalizeColor(item.color);
+      article.style.setProperty('--bubble-color', color);
+      article.style.setProperty('--bubble-text', pickTextColor(color));
+
+      const title = document.createElement('div');
+      title.className = 'bubble-title';
+      title.textContent = item.title || 'Untitled bubble';
+      article.appendChild(title);
+
+      if (item.description) {
+        const desc = document.createElement('div');
+        desc.className = 'bubble-description';
+        desc.textContent = item.description;
+        article.appendChild(desc);
+      }
+
+      return article;
+    }
+
+    function normalizeColor(color) {
+      const fallback = '#38bdf8';
+      if (!color) return fallback;
+      let c = String(color).trim().toLowerCase();
+      if (!c.startsWith('#')) c = `#${c}`;
+      if (/^#[0-9a-f]{6}$/.test(c)) return c;
+      if (/^#[0-9a-f]{3}$/.test(c)) {
+        const [hash, r, g, b] = c;
+        return `#${r}${r}${g}${g}${b}${b}`;
+      }
+      return fallback;
+    }
+
+    function pickTextColor(hex) {
+      const c = hex.replace('#', '');
+      if (c.length !== 6) return '#0f172a';
+      const r = parseInt(c.slice(0, 2), 16);
+      const g = parseInt(c.slice(2, 4), 16);
+      const b = parseInt(c.slice(4, 6), 16);
+      const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+      return yiq >= 160 ? '#0f172a' : '#ffffff';
+    }
+
+    function clearTable(message) {
+      tableBody.innerHTML = '';
+      if (message) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = DAYS.length + 1;
+        cell.className = 'empty-row';
+        cell.textContent = message;
+        row.appendChild(cell);
+        tableBody.appendChild(row);
+      }
+    }
+
+    function setStatus(message, variant) {
+      if (!message) {
+        statusEl.textContent = '';
+        statusEl.hidden = true;
+        return;
+      }
+      statusEl.hidden = false;
+      statusEl.textContent = message;
+      statusEl.dataset.variant = variant || 'info';
+    }
+  </script>
+</body>
+</html>
