@@ -41,6 +41,172 @@ document.addEventListener('DOMContentLoaded', () => {
   const bubbleDescriptionInput = document.getElementById('bubbleDescription');
   const bubbleTimeInput = document.getElementById('bubbleTime');
   const bubbleTimeFormRow = document.getElementById('bubbleTimeFormRow');
+  const colorGroup = document.querySelector('.color-swatch-group');
+  const addColorBtn = document.getElementById('addColorBtn');
+  const customColorPicker = document.getElementById('customColorPicker');
+
+  // Custom color FIFO history for modal color swatches
+  (function setupCustomColorPicker(){
+    if (!colorGroup || !addColorBtn || !customColorPicker) return;
+
+    function parsePx(v){
+      const n = parseFloat(String(v||''));
+      return Number.isFinite(n) ? n : 0;
+    }
+
+    function computeCapacity(){
+      try {
+        const groupRect = colorGroup.getBoundingClientRect();
+        const firstLabel = colorGroup.querySelector('label');
+        const labelRect = firstLabel ? firstLabel.getBoundingClientRect() : { width: 28 };
+        const styles = getComputedStyle(colorGroup);
+        const gap = parsePx(styles.gap || styles.columnGap || 8);
+        const slot = (labelRect.width || 28) + gap;
+        const addBtnRect = addColorBtn.getBoundingClientRect();
+        const usable = Math.max(0, groupRect.width - addBtnRect.width - gap);
+        const count = Math.max(1, Math.floor((usable + gap) / slot));
+        // total radiobuttons allowed (excluding add button)
+        return count;
+      } catch {
+        return 8; // sensible default
+      }
+    }
+
+    function getAllSwatches(){
+      return Array.from(colorGroup.querySelectorAll('input[type="radio"][name="bubbleColor"]'));
+    }
+
+    function findSwatchByValue(val){
+      const norm = (val||'').trim().toLowerCase();
+      return getAllSwatches().find(i => (i.value||'').trim().toLowerCase() === norm) || null;
+    }
+
+    function normalizeHex(hex){
+      try {
+        if (!hex) return null;
+        let h = hex.trim();
+        if (!h.startsWith('#')) h = '#' + h;
+        if (h.length === 4) {
+          const r = h[1], g = h[2], b = h[3];
+          h = '#' + r + r + g + g + b + b;
+        }
+        if (/^#[0-9a-fA-F]{6}$/.test(h)) return h.toLowerCase();
+      } catch {}
+      return null;
+    }
+
+    function addCustomSwatch(hex){
+      const value = normalizeHex(hex);
+      if (!value) return;
+
+      // If a swatch with this value exists, just select it
+      const existing = findSwatchByValue(value);
+      if (existing) {
+        try { existing.checked = true; existing.dispatchEvent(new Event('change', { bubbles: true })); } catch {}
+        return;
+      }
+
+      // Create radio + label pair
+      const id = `color-custom-${Date.now()}`;
+      const radio = document.createElement('input');
+      radio.type = 'radio';
+      radio.name = 'bubbleColor';
+      radio.id = id;
+      radio.value = value;
+      radio.setAttribute('data-custom', 'true');
+      radio.setAttribute('data-created-at', String(Date.now()));
+
+      const label = document.createElement('label');
+      label.setAttribute('for', id);
+      label.title = value;
+      label.style.backgroundColor = value;
+
+      // Insert before the + button
+      colorGroup.insertBefore(label, addColorBtn);
+      colorGroup.insertBefore(radio, label);
+
+      // Select the new color
+      try { radio.checked = true; radio.dispatchEvent(new Event('change', { bubbles: true })); } catch {}
+
+      // Enforce capacity (FIFO over custom swatches only)
+      enforceCapacity();
+    }
+
+    function escCssIdent(s){
+      try {
+        if (window.CSS && typeof CSS.escape === 'function') return CSS.escape(s);
+      } catch {}
+      // basic fallback: escape non-word chars
+      return String(s).replace(/([^a-zA-Z0-9_-])/g, '\\$1');
+    }
+
+    function enforceCapacity(){
+      const capacity = computeCapacity();
+      const radios = getAllSwatches();
+      if (radios.length <= capacity) return;
+      // Remove oldest custom swatches until we fit
+      const customs = radios.filter(r => r.hasAttribute('data-custom'))
+        .sort((a,b) => Number(a.getAttribute('data-created-at')) - Number(b.getAttribute('data-created-at')));
+      while (getAllSwatches().length > capacity && customs.length) {
+        const r = customs.shift();
+        if (!r) break;
+        // Avoid removing the currently checked swatch; if so, skip and take next
+        if (r.checked && customs.length) continue;
+        const lab = colorGroup.querySelector(`label[for="${escCssIdent(r.id)}"]`);
+        try { r.remove(); } catch {}
+        if (lab) { try { lab.remove(); } catch {} }
+      }
+    }
+
+    function showPickerNearButton(){
+      try {
+        const rect = addColorBtn.getBoundingClientRect();
+        customColorPicker.classList.remove('sr-only-color-picker');
+        Object.assign(customColorPicker.style, {
+          position: 'fixed',
+          left: Math.max(8, Math.min(window.innerWidth - 40, rect.left)) + 'px',
+          top: Math.max(8, Math.min(window.innerHeight - 40, rect.bottom + 8)) + 'px',
+          width: '32px',
+          height: '32px',
+          opacity: '0',
+          pointerEvents: 'auto',
+          zIndex: '999999',
+        });
+        if (customColorPicker.showPicker) {
+          customColorPicker.showPicker();
+        } else {
+          customColorPicker.focus();
+          customColorPicker.click();
+        }
+      } catch {
+        try { customColorPicker.click(); } catch {}
+      }
+    }
+
+    function hidePicker(){
+      try {
+        customColorPicker.classList.add('sr-only-color-picker');
+        customColorPicker.removeAttribute('style');
+      } catch {}
+    }
+
+    addColorBtn.addEventListener('click', () => {
+      showPickerNearButton();
+    });
+
+    function handlePick(){
+      const val = customColorPicker.value;
+      addCustomSwatch(val);
+      hidePicker();
+    }
+    customColorPicker.addEventListener('input', handlePick);
+    customColorPicker.addEventListener('change', handlePick);
+
+    // Recompute capacity on resize
+    window.addEventListener('resize', () => {
+      enforceCapacity();
+    });
+  })();
 
   function toggleSidebar(open) {
     if (!sidebar || !menuBtn || !backdrop) return;
