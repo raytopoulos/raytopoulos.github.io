@@ -859,17 +859,21 @@ document.addEventListener('DOMContentLoaded', () => {
             insertedAtFinal = base.getTime();
             editingEl.setAttribute('data-inserted-at', String(insertedAtFinal));
             // Update visible time label
-            const pad = (n) => String(n).padStart(2, '0');
-            const hh = pad(base.getHours());
-            const mm = pad(base.getMinutes());
-            const ss = pad(base.getSeconds());
             let tsSpan = timeSpan;
             if (!tsSpan) {
               tsSpan = document.createElement('span');
               tsSpan.className = 'bubble-time';
               editingEl.appendChild(tsSpan);
             }
-            tsSpan.textContent = ` · ${hh}:${mm}:${ss}`;
+            let formattedTime = '';
+            try {
+              const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              formattedTime = formatter.format(base);
+            } catch {
+              const pad = (n) => String(n).padStart(2, '0');
+              formattedTime = `${pad(base.getHours())}:${pad(base.getMinutes())}:${pad(base.getSeconds())}`;
+            }
+            tsSpan.textContent = formattedTime;
           } catch {}
           // Reapply colors
           editingEl.style.backgroundColor = color;
@@ -1062,3 +1066,4 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 });
+

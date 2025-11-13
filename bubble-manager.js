@@ -120,14 +120,16 @@ export function createBubbleManager({
         el.setAttribute('data-inserted-at', String(ts));
         const timeSpan = document.createElement('span');
         timeSpan.className = 'bubble-time';
+        let formattedTime = '';
         try {
           const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-          timeSpan.textContent = ' · ' + formatter.format(new Date(ts));
+          formattedTime = formatter.format(new Date(ts));
         } catch {
           const d = new Date(ts);
           const pad = (n) => String(n).padStart(2, '0');
-          timeSpan.textContent = ' · ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+          formattedTime = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
         }
+        timeSpan.textContent = formattedTime;
         el.appendChild(timeSpan);
       }
     }
@@ -187,3 +189,4 @@ export function createBubbleManager({
     setPrototypeEditHandler: (handler) => { prototypeEditHandler = handler; },
   };
 }
+

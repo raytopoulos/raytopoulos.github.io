@@ -29,12 +29,13 @@
     }
 
     .view-shell {
-      max-width: 1200px;
+      width: 100%;
+      max-width: none;
       margin: 0 auto;
-      padding: 32px 16px 64px;
+      padding: 24px clamp(12px, 2vw, 32px) 40px;
       display: flex;
       flex-direction: column;
-      gap: 24px;
+      gap: 20px;
     }
 
     .view-header h1 {
@@ -51,7 +52,7 @@
     .table-card {
       background: var(--card-bg);
       border-radius: 20px;
-      padding: 24px;
+      padding: 18px;
       box-shadow: 0 25px 80px rgba(15, 23, 42, 0.08);
       border: 1px solid rgba(15, 23, 42, 0.05);
     }
@@ -76,15 +77,13 @@
     .timeline-table {
       width: 100%;
       border-collapse: collapse;
-      min-width: 720px;
+      min-width: 960px;
       font-size: 0.95rem;
     }
 
     .timeline-table th,
     .timeline-table td {
       border: 1px solid var(--border);
-      padding: 12px;
-      vertical-align: top;
       background: #fff;
     }
 
@@ -96,6 +95,11 @@
       color: var(--muted);
     }
 
+    .timeline-table thead th,
+    .timeline-table tbody th {
+      padding: 12px;
+    }
+
     .timeline-table tbody th {
       background: #f8fafc;
       font-size: 0.95rem;
@@ -103,8 +107,11 @@
     }
 
     .timeline-table td {
-      min-width: 120px;
-      height: 100px;
+      padding: 0;
+      min-width: 140px;
+      height: 90px;
+      vertical-align: top;
+      overflow: hidden;
     }
 
     .timeline-table td.empty {
@@ -118,27 +125,67 @@
       background: #f8fafc;
     }
 
+    .cell-content {
+      width: 100%;
+      height: 100%;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      align-items: stretch;
+      justify-content: stretch;
+    }
+
+    .cell-content--single {
+      padding: 0;
+      gap: 0;
+    }
+
+    .cell-content--stack {
+      padding: 6px;
+      background: #fff;
+    }
+
+    .cell-content--empty {
+      justify-content: center;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .cell-placeholder {
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      opacity: 0.55;
+    }
+
     .bubble-rect {
       display: flex;
       flex-direction: column;
       gap: 0.45rem;
-      padding: 12px 14px;
-      border-radius: 16px;
-      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
-      border: 1px solid rgba(15, 23, 42, 0.08);
+      padding: 16px;
+      border-radius: 0;
+      box-shadow: none;
+      border: none;
       font-weight: 600;
       background: var(--bubble-color, #38bdf8);
       color: var(--bubble-text, #0f172a);
       transition: transform 150ms ease, box-shadow 150ms ease;
-    }
-
-    .bubble-rect + .bubble-rect {
-      margin-top: 8px;
+      width: 100%;
     }
 
     .bubble-rect:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.25);
+      transform: none;
+      box-shadow: none;
+    }
+
+    .cell-content--single .bubble-rect {
+      flex: 1 1 0;
+      height: 100%;
+    }
+
+    .cell-content--stack .bubble-rect {
+      flex: 1 1 auto;
     }
 
     .bubble-title {
@@ -323,14 +370,28 @@
         for (const day of DAYS) {
           const td = document.createElement('td');
           td.dataset.day = day;
+          const wrapper = document.createElement('div');
+          wrapper.className = 'cell-content';
           const entries = row.perDay.get(day) || [];
           if (!entries.length) {
             td.classList.add('empty');
+            wrapper.classList.add('cell-content--empty');
+            const placeholder = document.createElement('span');
+            placeholder.className = 'cell-placeholder';
+            placeholder.textContent = '--';
+            placeholder.setAttribute('aria-hidden', 'true');
+            wrapper.appendChild(placeholder);
           } else {
+            if (entries.length === 1) {
+              wrapper.classList.add('cell-content--single');
+            } else {
+              wrapper.classList.add('cell-content--stack');
+            }
             for (const entry of entries) {
-              td.appendChild(renderBubble(entry));
+              wrapper.appendChild(renderBubble(entry));
             }
           }
+          td.appendChild(wrapper);
           tr.appendChild(td);
         }
         tableBody.appendChild(tr);

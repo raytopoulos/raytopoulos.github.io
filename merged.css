@@ -222,8 +222,8 @@
       cursor:grab;
       max-width:100%;
       overflow:hidden;
-      white-space:nowrap;
-      text-overflow:ellipsis;
+      white-space:normal;
+      text-overflow:initial;
       box-shadow:0 1px 3px rgba(0,0,0,.05);
       transition:opacity .2s, transform .2s, box-shadow .15s, filter .15s;
       width: 100%; /* Important for vertical stacking to fill container */
@@ -231,6 +231,13 @@
       user-select:none;              /* Prevent text selection while initiating drag */
       -webkit-user-select:none;
       -webkit-user-drag:none;       /* Prevent native drag ghost on WebKit */
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:3px;
+      line-height:1.3;
+      overflow-wrap:anywhere;
+      text-align:center;
     }
     .bubble.prototype{
         width: auto; /* Prototypes should not be full width */
@@ -265,11 +272,20 @@
     }
 
     /* Inline timestamp after label */
+    .bubble .bubble-label{
+      width:100%;
+      text-align:center;
+    }
     .bubble .bubble-time{
-      margin-left:8px;
+      margin-left:0;
+      margin-top:2px;
       opacity:.8;
       font-weight:500;
       font-size:12px;
+      display:block;
+      line-height:1.2;
+      width:100%;
+      text-align:center;
     }
 
     /* Trash Zone */
@@ -278,7 +294,7 @@
       bottom:16px;
       right:16px;
       left:auto;
-      background:rgba(254,242,242,.95);
+      background:rgba(239,68,68,.92);
       width:132px;  /* rectangle: slightly larger hit area */
       height:92px;  /* rectangle: slightly larger hit area */
       display:flex;
@@ -289,9 +305,9 @@
       pointer-events:none; /* Must be pointer-events:none by default */
       opacity:0;
       transition:opacity .2s, transform .2s, box-shadow .2s;
-      border:1px solid #fecaca;
+      border:1px solid #dc2626;
       border-radius:16px; /* rounded rectangle */
-      box-shadow:0 8px 22px rgba(0,0,0,.14);
+      box-shadow:0 8px 22px rgba(220,38,38,.35);
       overflow:visible;
     }
     #trash.trash-active{ cursor:pointer; }
@@ -308,16 +324,16 @@
     }
     #trash:hover,
     #trash.drop-active{
-      box-shadow:0 10px 26px rgba(239,68,68,.35), 0 6px 18px rgba(0,0,0,.18);
+      box-shadow:0 10px 26px rgba(185,28,28,.45), 0 6px 18px rgba(185,28,28,.25);
       animation: trash-pulse .7s ease-in-out infinite;
-      background:rgba(254,242,242,1);
+      background:rgba(220,38,38,1);
     }
     #trash:hover::after,
     #trash.drop-active::after{
       content:"";
       position:absolute;
       inset:-6px;
-      border:2px solid #fecaca;
+      border:2px solid rgba(248,113,113,.85);
       border-radius:16px; /* follow rounded rectangle */
       animation: trash-ring .7s ease-out infinite;
       pointer-events:none;
