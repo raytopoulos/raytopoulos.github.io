@@ -12,6 +12,7 @@ import {
   createPrototypeSet,
   loadPrototypeSet,
   savePrototypeSet,
+  saveColorStatsToDb,
 } from './instances.js';
 
 // Prevent native drag ghost and context menu interfering with custom DnD
@@ -127,6 +128,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function saveColorStats(){
       try {
         localStorage.setItem(COLOR_STATS_KEY, JSON.stringify(colorStats));
+      } catch {}
+      try {
+        // Also persist color stats to Firebase under /prototypes/colors
+        saveColorStatsToDb(colorStats).catch(() => {});
       } catch {}
     }
 

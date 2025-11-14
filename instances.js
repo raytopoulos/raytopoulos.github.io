@@ -137,6 +137,38 @@ export async function savePrototypeSet(id, prototypes = []) {
   await set(ref(db, `prototypes/${id}`), data);
 }
 
+/**
+ * Persist color statistics under /prototypes/colors.
+ * Accepts a map of color keys (e.g. "#38bdf8" or "38bdf8") to
+ * { useCount, lastUsed, createdAt } objects and normalizes keys
+ * to 6-hex digits without "#" for Firebase-safe paths.
+ *
+ * @param {Record<string, {useCount?:number,lastUsed?:number,createdAt?:number}>} stats
+ */
+export async function saveColorStatsToDb(stats = {}) {
+  const out = {};
+  if (stats && typeof stats === "object") {
+    for (const [key, value] of Object.entries(stats)) {
+      try {
+        const hex = normalizeColor(key); // -> "rrggbb" or throws
+        const useCount = Number.isFinite(Number(value && value.useCount))
+          ? Number(value.useCount)
+          : 0;
+        const lastUsed = Number.isFinite(Number(value && value.lastUsed))
+          ? Number(value.lastUsed)
+          : 0;
+        const createdAt = Number.isFinite(Number(value && value.createdAt))
+          ? Number(value.createdAt)
+          : 0;
+        out[hex] = { useCount, lastUsed, createdAt };
+      } catch {
+        // Ignore invalid color keys
+      }
+    }
+  }
+  await set(ref(db, "prototypes/colors"), out);
+}
+
 /** Build a shareable URL with ?id=<id> for the current page */
 export function makeShareURL(id) {
   const u = new URL(location.href);
