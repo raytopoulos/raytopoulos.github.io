@@ -1,7 +1,18 @@
 import { createAccordionController } from './accordion.js';
 import { createBubbleManager } from './bubble-manager.js';
 import { createDragController } from './drag-controller.js';
-import { createInstance, loadInstance, pushDayItem, setDayItem, removeDayItem, DAYS } from './instances.js';
+import {
+  createInstance,
+  loadInstance,
+  pushDayItem,
+  setDayItem,
+  removeDayItem,
+  DAYS,
+  PROTOTYPE_ID_LENGTH,
+  createPrototypeSet,
+  loadPrototypeSet,
+  savePrototypeSet,
+} from './instances.js';
 
 // Prevent native drag ghost and context menu interfering with custom DnD
 document.addEventListener('dragstart', (e) => {
@@ -37,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const modal = document.getElementById('modal');
   const form = document.getElementById('newBubbleForm');
   const cancelBtn = document.getElementById('cancelBtn');
+  const submitBtn = document.getElementById('submitBtn');
   const bubbleTextInput = document.getElementById('bubbleText');
   const bubbleDescriptionInput = document.getElementById('bubbleDescription');
   const bubbleTimeInput = document.getElementById('bubbleTime');
@@ -45,6 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const addColorBtn = document.getElementById('addColorBtn');
   let recordColorUsage = () => {};
   let sortSwatchesByUsage = () => {};
+  let recordPrototypeUsage = () => {};
 
   // Custom color FIFO history for modal color swatches
   (function setupCustomColorPicker(){
@@ -546,6 +559,176 @@ document.addEventListener('DOMContentLoaded', () => {
     sortSwatchesByUsage = sortSwatchesByUsageInternal;
   })();
 
+  // Prototype usage tracking (for sorting sidebar by most-used)
+  const PROTOTYPE_USAGE_KEY = 'organizer:prototypeUsage';
+  let prototypeUsageCache = null;
+
+  function loadPrototypeUsage() {
+    if (prototypeUsageCache) return prototypeUsageCache;
+    try {
+      const raw = localStorage.getItem(PROTOTYPE_USAGE_KEY);
+      if (!raw) {
+        prototypeUsageCache = {};
+        return prototypeUsageCache;
+      }
+      const data = JSON.parse(raw);
+      prototypeUsageCache = (data && typeof data === 'object') ? data : {};
+    } catch {
+      prototypeUsageCache = {};
+    }
+    return prototypeUsageCache;
+  }
+
+  function savePrototypeUsage() {
+    if (!prototypeUsageCache) return;
+    try {
+      localStorage.setItem(PROTOTYPE_USAGE_KEY, JSON.stringify(prototypeUsageCache));
+    } catch {}
+  }
+
+  function normalizePrototypeColorForKey(color) {
+    if (!color) return '';
+    try {
+      let c = String(color).trim().toLowerCase();
+      if (c.startsWith('rgb(') || c.startsWith('rgba(')) {
+        // Best-effort: leave RGB strings as-is
+        return c;
+      }
+      if (c.startsWith('#')) c = c.slice(1);
+      if (/^[0-9a-f]{3}$/.test(c)) {
+        const r = c[0];
+        const g = c[1];
+        const b = c[2];
+        c = `${r}${r}${g}${g}${b}${b}`;
+      }
+      if (/^[0-9a-f]{6}$/.test(c)) {
+        return `#${c}`;
+      }
+      return c;
+    } catch {
+      return '';
+    }
+  }
+
+  function makePrototypeUsageKey(protoLike) {
+    if (!protoLike) return null;
+    const text = String(protoLike.text || '').trim();
+    const color = normalizePrototypeColorForKey(protoLike.color || protoLike.dataColor || '');
+    const description = String(protoLike.description || '').trim();
+    if (!text && !color && !description) return null;
+    return `${text}||${color}||${description}`;
+  }
+
+  function ensurePrototypeUsageEntry(proto, fallbackCreatedAt) {
+    const usage = loadPrototypeUsage();
+    const key = makePrototypeUsageKey(proto);
+    if (!key) return { key: null, stats: null };
+    let stats = usage[key];
+    let dirty = false;
+    if (!stats || typeof stats !== 'object') {
+      stats = { useCount: 0, lastUsed: 0, createdAt: fallbackCreatedAt };
+      usage[key] = stats;
+      dirty = true;
+    } else {
+      if (typeof stats.createdAt !== 'number') {
+        stats.createdAt = fallbackCreatedAt;
+        dirty = true;
+      }
+      if (typeof stats.useCount !== 'number') {
+        stats.useCount = 0;
+        dirty = true;
+      }
+      if (typeof stats.lastUsed !== 'number') {
+        stats.lastUsed = 0;
+        dirty = true;
+      }
+    }
+    if (dirty) savePrototypeUsage();
+    return { key, stats };
+  }
+
+  function sortPrototypesByUsage(list) {
+    if (!Array.isArray(list) || list.length <= 1) return Array.isArray(list) ? list.slice() : [];
+    const now = Date.now();
+    const baseCreatedAt = now - list.length;
+    const usage = loadPrototypeUsage();
+
+    const annotated = list.map((proto, index) => {
+      const fallbackCreatedAt = baseCreatedAt + index;
+      const key = makePrototypeUsageKey(proto);
+      if (!key) {
+        return {
+          proto,
+          useCount: 0,
+          lastUsed: 0,
+          createdAt: fallbackCreatedAt,
+          index,
+        };
+      }
+      let stats = usage[key];
+      if (!stats || typeof stats !== 'object') {
+        stats = { useCount: 0, lastUsed: 0, createdAt: fallbackCreatedAt };
+        usage[key] = stats;
+      } else {
+        if (typeof stats.createdAt !== 'number') stats.createdAt = fallbackCreatedAt;
+        if (typeof stats.useCount !== 'number') stats.useCount = 0;
+        if (typeof stats.lastUsed !== 'number') stats.lastUsed = 0;
+      }
+      return {
+        proto,
+        useCount: stats.useCount || 0,
+        lastUsed: stats.lastUsed || 0,
+        createdAt: stats.createdAt || fallbackCreatedAt,
+        index,
+      };
+    });
+
+    // Persist any new/normalized stats (e.g., createdAt defaults)
+    savePrototypeUsage();
+
+    annotated.sort((a, b) => {
+      if (b.useCount !== a.useCount) return b.useCount - a.useCount; // most used first
+      if (b.lastUsed !== a.lastUsed) return b.lastUsed - a.lastUsed; // most recently used first
+      if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt; // older entries first
+      return a.index - b.index; // stable tiebreaker
+    });
+
+    return annotated.map((entry) => entry.proto);
+  }
+
+  recordPrototypeUsage = (protoOrText, colorMaybe, descriptionMaybe) => {
+    try {
+      let proto;
+      if (protoOrText && typeof protoOrText === 'object') {
+        proto = {
+          text: protoOrText.text,
+          color: protoOrText.color,
+          description: protoOrText.description,
+        };
+      } else {
+        proto = {
+          text: protoOrText,
+          color: colorMaybe,
+          description: descriptionMaybe,
+        };
+      }
+      const usage = loadPrototypeUsage();
+      const key = makePrototypeUsageKey(proto);
+      if (!key) return;
+      const now = Date.now();
+      let stats = usage[key];
+      if (!stats || typeof stats !== 'object') {
+        stats = { useCount: 0, lastUsed: 0, createdAt: now };
+        usage[key] = stats;
+      }
+      stats.useCount = (stats.useCount || 0) + 1;
+      stats.lastUsed = now;
+      savePrototypeUsage();
+    } catch {
+      // Swallow errors to avoid breaking UX if localStorage is unavailable
+    }
+  };
+
   function toggleSidebar(open) {
     if (!sidebar || !menuBtn || !backdrop) return;
     const shouldOpen = typeof open === 'boolean' ? open : !sidebar.classList.contains('open');
@@ -599,7 +782,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Instance + persistence wiring using instances.js
   const LS_KEY = 'organizer:instanceId';
+  const LS_INSTANCE_COUNTER_PREFIX = 'organizer:instanceCounter:';
   let currentInstanceId = null;
+  let currentPrototypeId = null;
 
   function dayIndexToName(i) { return DAYS[i] || null; }
 
@@ -607,31 +792,215 @@ document.addEventListener('DOMContentLoaded', () => {
     return document.querySelector(`.day-flow[data-day-index="${index}"]`);
   }
 
-  async function ensureInstanceId() {
-    if (currentInstanceId) return currentInstanceId;
+  function parseCompositeInstanceId(id) {
+    if (!id) return { prototypeId: null, instanceNumber: null };
+    const raw = String(id);
+    if (!Number.isFinite(PROTOTYPE_ID_LENGTH) || PROTOTYPE_ID_LENGTH <= 0) {
+      return { prototypeId: null, instanceNumber: null };
+    }
+    if (raw.length <= PROTOTYPE_ID_LENGTH) {
+      return { prototypeId: null, instanceNumber: null };
+    }
+    const prototypeId = raw.slice(0, PROTOTYPE_ID_LENGTH);
+    const suffix = raw.slice(PROTOTYPE_ID_LENGTH);
+    const n = Number.parseInt(suffix, 10);
+    if (!Number.isFinite(n) || n <= 0) {
+      return { prototypeId: null, instanceNumber: null };
+    }
+    return { prototypeId, instanceNumber: n };
+  }
+
+  function makeCompositeInstanceId(prototypeId, instanceNumber) {
+    const pid = String(prototypeId || '').trim();
+    const suffix = String(instanceNumber ?? '').trim();
+    if (!pid || !suffix) throw new Error('Missing prototypeId or instanceNumber');
+    return `${pid}${suffix}`;
+  }
+
+  async function persistPrototypes() {
+    if (!currentPrototypeId) return;
+    if (!bubbleManager || typeof bubbleManager.getPrototypes !== 'function') return;
+    try {
+      const sidebarPrototypes = bubbleManager.getPrototypes();
+      const toSave = Array.isArray(sidebarPrototypes)
+        ? sidebarPrototypes.map((p) => ({
+            text: p.text || '',
+            color: (p.color || '#38bdf8').replace(/^#/, ''),
+            description: p.description || '',
+          }))
+        : [];
+      await savePrototypeSet(currentPrototypeId, toSave);
+    } catch (e) {
+      console.warn('Failed to persist prototypes', e);
+    }
+  }
+
+  async function bootstrapInstanceAndPrototypes() {
+    if (currentInstanceId) {
+      return { id: currentInstanceId, prototypeId: currentPrototypeId };
+    }
+
     const url = new URL(location.href);
-    const fromUrl = url.searchParams.get('id');
+    const fromUrl = url.searchParams.get('id') || null;
     const fromLS = localStorage.getItem(LS_KEY) || null;
-    let id = fromUrl || fromLS;
-    if (!id) {
-      const created = await createInstance();
-      id = created.id;
-      try { localStorage.setItem(LS_KEY, id); } catch {}
+    let rawId = fromUrl || fromLS || null;
+
+    const parsed = parseCompositeInstanceId(rawId);
+    const hasComposite = !!(parsed.prototypeId && parsed.instanceNumber);
+    let prototypeId = parsed.prototypeId || null;
+    let instanceNumber = parsed.instanceNumber || null;
+
+    let prototypesPayload = null;
+
+    // If we already have a composite id, try to load its prototype set.
+    if (hasComposite && prototypeId) {
       try {
-        url.searchParams.set('id', id);
-        history.replaceState({}, '', url.toString());
-      } catch {}
-    } else {
-      // keep LS and URL in sync if they differ
-      try { localStorage.setItem(LS_KEY, id); } catch {}
+        const protoSnap = await loadPrototypeSet(prototypeId);
+        if (protoSnap && Array.isArray(protoSnap.prototypes)) {
+          prototypesPayload = protoSnap.prototypes;
+        }
+      } catch (e) {
+        console.warn('Failed to load prototypes set', e);
+      }
+    }
+
+    // If no id at all, create a new prototype set and composite instance id.
+    if (!rawId) {
+      let seedList = [];
+      try {
+        seedList = bubbleManager.getPrototypes().map((p) => ({
+          text: p.text || '',
+          color: (p.color || '#38bdf8').replace(/^#/, ''),
+          description: p.description || '',
+        }));
+      } catch {
+        seedList = [
+          { text: 'Task', color: '38bdf8', description: '' },
+          { text: 'Idea', color: 'a78bfa', description: '' },
+          { text: 'Bug', color: 'f87171', description: '' },
+          { text: 'Note', color: '10b981', description: '' },
+        ];
+      }
+      const createdProto = await createPrototypeSet(seedList);
+      prototypeId = createdProto.id;
+      prototypesPayload = createdProto.data && Array.isArray(createdProto.data.prototypes)
+        ? createdProto.data.prototypes
+        : seedList;
+
+      const counterKey = `${LS_INSTANCE_COUNTER_PREFIX}${prototypeId}`;
+      let next = Number(localStorage.getItem(counterKey) || '0');
+      if (!Number.isFinite(next) || next < 0) next = 0;
+      next += 1;
+      try { localStorage.setItem(counterKey, String(next)); } catch {}
+      instanceNumber = next;
+
+      rawId = makeCompositeInstanceId(prototypeId, instanceNumber);
+    }
+
+    // If we have an id but it is not a composite id, treat it as legacy.
+    if (rawId && !hasComposite) {
+      currentInstanceId = rawId;
+      currentPrototypeId = null;
+      try { localStorage.setItem(LS_KEY, rawId); } catch {}
       try {
         if (!fromUrl) {
-          url.searchParams.set('id', id);
+          url.searchParams.set('id', rawId);
           history.replaceState({}, '', url.toString());
         }
       } catch {}
+      // Legacy instances don't have a prototype set; render defaults sorted by usage.
+      let legacyPrototypes = [];
+      try {
+        legacyPrototypes = bubbleManager.getPrototypes();
+      } catch {
+        legacyPrototypes = [];
+      }
+      if (legacyPrototypes && legacyPrototypes.length) {
+        const sortedLegacy = sortPrototypesByUsage(legacyPrototypes);
+        bubbleManager.renderInitialPrototypes(sortedLegacy);
+      } else {
+        bubbleManager.renderInitialPrototypes();
+      }
+      return { id: rawId, prototypeId: null };
     }
-    currentInstanceId = id;
+
+    const compositeId = rawId;
+
+    // If composite id exists but prototype set is missing, seed it from current sidebar.
+    if (hasComposite && prototypeId && !prototypesPayload) {
+      let seedList = [];
+      try {
+        seedList = bubbleManager.getPrototypes().map((p) => ({
+          text: p.text || '',
+          color: (p.color || '#38bdf8').replace(/^#/, ''),
+          description: p.description || '',
+        }));
+      } catch {
+        seedList = [
+          { text: 'Task', color: '38bdf8', description: '' },
+          { text: 'Idea', color: 'a78bfa', description: '' },
+          { text: 'Bug', color: 'f87171', description: '' },
+          { text: 'Note', color: '10b981', description: '' },
+        ];
+      }
+      try {
+        await savePrototypeSet(prototypeId, seedList);
+        prototypesPayload = seedList;
+      } catch (e) {
+        console.warn('Failed to backfill prototypes set', e);
+      }
+    }
+
+    try { localStorage.setItem(LS_KEY, compositeId); } catch {}
+    try {
+      if (!fromUrl || fromUrl !== compositeId) {
+        url.searchParams.set('id', compositeId);
+        history.replaceState({}, '', url.toString());
+      }
+    } catch {}
+
+    currentInstanceId = compositeId;
+    currentPrototypeId = prototypeId;
+
+    // Ensure instance document exists for this id.
+    try {
+      const existing = await loadInstance(compositeId);
+      if (!existing) {
+        await createInstance({ id: compositeId, prototypeId, instanceNumber });
+      }
+    } catch (e) {
+      console.warn('Failed to ensure instance document', e);
+    }
+
+    // Build sidebar prototype list (from DB payload or defaults), then sort by usage.
+    let sidebarPrototypes = [];
+    if (Array.isArray(prototypesPayload) && prototypesPayload.length) {
+      sidebarPrototypes = prototypesPayload.map((p) => ({
+        text: p.text || '',
+        color: `#${String(p.color || '38bdf8').replace(/^#/, '')}`,
+        description: p.description || '',
+      }));
+    } else {
+      try {
+        sidebarPrototypes = bubbleManager.getPrototypes();
+      } catch {
+        sidebarPrototypes = [];
+      }
+    }
+
+    if (sidebarPrototypes.length) {
+      const sortedPrototypes = sortPrototypesByUsage(sidebarPrototypes);
+      bubbleManager.renderInitialPrototypes(sortedPrototypes);
+    } else {
+      bubbleManager.renderInitialPrototypes();
+    }
+
+    return { id: compositeId, prototypeId };
+  }
+
+  async function ensureInstanceId() {
+    if (currentInstanceId) return currentInstanceId;
+    const { id } = await bootstrapInstanceAndPrototypes();
     return id;
   }
 
@@ -706,6 +1075,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   dragController.setAddBubbleHandler(async ({ dayIndex, text, color, description, before }) => {
     try {
+      try {
+        recordPrototypeUsage({ text, color, description });
+      } catch {}
       const insertedAt = Date.now();
       const el = bubbleManager.addBubbleToDay(dayIndex, text, color, { before, insertedAt, description });
       const id = await ensureInstanceId();
@@ -721,8 +1093,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   dragController.setMoveBubbleHandler((payload) => { handleMove(payload).catch((e) => console.warn('Move persist failed', e)); });
   dragController.setDeleteBubbleHandler((payload) => { handleDelete(payload).catch((e) => console.warn('Delete persist failed', e)); });
-
-  bubbleManager.renderInitialPrototypes();
+  try {
+    if (typeof dragController.setDeletePrototypeHandler === 'function') {
+      dragController.setDeletePrototypeHandler(() => {
+        // Defer until after the DOM element is removed so getPrototypes sees the new state.
+        setTimeout(() => {
+          persistPrototypes().catch((e) => console.warn('Failed to save prototype deletion', e));
+        }, 0);
+      });
+    }
+  } catch {}
 
   let isEditMode = false;
   let modalMode = 'create';
@@ -735,6 +1115,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     modalMode = mode;
     editingEl = el;
+    if (submitBtn) {
+      submitBtn.textContent = mode === 'create' ? 'Create Bubble' : 'Save';
+    }
     modal.removeAttribute('hidden');
     form.reset();
     // Show time field only in edit mode
@@ -961,12 +1344,21 @@ document.addEventListener('DOMContentLoaded', () => {
               editingEl.style.borderColor = adjustColor(color, -20);
               editingEl.style.color = isLight(color) ? 'var(--text)' : 'white';
             } catch {}
+            // Persist updated prototypes
+            (async () => {
+              await ensureInstanceId();
+              await persistPrototypes();
+            })().catch((e) => console.warn('Failed to save edited prototype', e));
           } finally {
             closeModal();
             recordColorUsage(color);
           }
         } else {
           bubbleManager.prependPrototype({ text, color, description });
+          (async () => {
+            await ensureInstanceId();
+            await persistPrototypes();
+          })().catch((e) => console.warn('Failed to save new prototype', e));
           closeModal();
           recordColorUsage(color);
         }

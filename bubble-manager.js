@@ -154,38 +154,40 @@ export function createBubbleManager({
 
   function prependPrototype(prototype) {
     prototypes.unshift(prototype);
-    if (templatesContainer) {
-      const el = createPrototypeElement(prototype);
-      templatesContainer.prepend(el);
-    }
+    if (!templatesContainer) return;
+    const el = createPrototypeElement(prototype);
+    templatesContainer.prepend(el);
   }
 
-  function renderInitialPrototypes() {
+  function renderInitialPrototypes(initialList) {
     if (!templatesContainer) return;
-    prototypes.forEach((prototype) => {
+    templatesContainer.innerHTML = '';
+    const source = Array.isArray(initialList) && initialList.length
+      ? initialList
+      : prototypes;
+    source.forEach((prototype) => {
       const el = createPrototypeElement(prototype);
       templatesContainer.appendChild(el);
     });
-    // Wire deletion for prototypes when dropped to trash (non-persistent)
-    try {
-      if (dragController && typeof dragController.setDeletePrototypeHandler === 'function') {
-        dragController.setDeletePrototypeHandler(({ el }) => {
-          try {
-            const text = el.getAttribute('data-text');
-            const color = el.getAttribute('data-color');
-            const idx = prototypes.findIndex((p) => p.text === text && p.color === color);
-            if (idx >= 0) prototypes.splice(idx, 1);
-          } catch {}
-        });
-      }
-    } catch {}
   }
 
   return {
     addBubbleToDay,
     prependPrototype,
     renderInitialPrototypes,
-    getPrototypes: () => prototypes.slice(),
+    getPrototypes: () => {
+      if (templatesContainer) {
+        const nodes = templatesContainer.querySelectorAll('.bubble.prototype');
+        if (nodes.length) {
+          return Array.from(nodes).map((el) => ({
+            text: el.getAttribute('data-text') || el.textContent || '',
+            color: el.getAttribute('data-color') || '#38bdf8',
+            description: el.getAttribute('data-description') || '',
+          }));
+        }
+      }
+      return prototypes.slice();
+    },
     setPrototypeEditHandler: (handler) => { prototypeEditHandler = handler; },
   };
 }

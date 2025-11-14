@@ -18,6 +18,10 @@ export const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const db  = getDatabase(app);
 
+// Firebase Realtime Database push() keys are 20-character strings.
+// We rely on this length when parsing composite instance ids that embed a prototype id.
+export const PROTOTYPE_ID_LENGTH = 20;
+
 // For local testing with the Realtime Database Emulator, uncomment:
 // if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
 //   connectDatabaseEmulator(db, "127.0.0.1", 9000);
@@ -40,15 +44,32 @@ export const makeDays = () => ({
 });
 
 /**
- * Creates /instances/<autoId> with { days: {...}, createdAt }.
- * @param {object} extra Optional fields to merge in.
+ * Creates /instances/<id> with { days: {...}, createdAt, ...extra }.
+ * If extra.id is provided, uses that as the instance id; otherwise
+ * falls back to a client-generated push() key.
+ *
+ * @param {{id?:string}} extra Optional fields to merge in; may include an explicit id.
  * @returns {Promise<{id:string, data:object}>}
  */
 export async function createInstance(extra = {}) {
-  const newRef = push(ref(db, "instances")); // client-generated unguessable key
-  const id = newRef.key;
-  const data = { days: makeDays(), createdAt: Date.now(), ...extra };
-  await set(newRef, data);
+  const payload = extra || {};
+  const providedId = typeof payload.id === "string" && payload.id ? payload.id : null;
+
+  let instanceRef;
+  let id;
+
+  if (providedId) {
+    id = providedId;
+    instanceRef = ref(db, `instances/${id}`);
+  } else {
+    const newRef = push(ref(db, "instances")); // client-generated unguessable key
+    instanceRef = newRef;
+    id = newRef.key;
+  }
+
+  const { id: _omitId, ...rest } = payload;
+  const data = { days: makeDays(), createdAt: Date.now(), ...rest };
+  await set(instanceRef, data);
   return { id, data };
 }
 
@@ -60,6 +81,60 @@ export async function loadInstance(id) {
   if (!id) return null;
   const snap = await get(ref(db, `instances/${id}`));
   return snap.val();
+}
+
+/**
+ * Creates /prototypes/<autoId> with
+ * { prototypes: [{text,color,description}], createdAt }.
+ * Colors are stored as 6-hex digits without leading '#', same as day items.
+ *
+ * @param {Array<{text?:string,color?:string,description?:string}>} prototypes
+ * @returns {Promise<{id:string, data:object}>}
+ */
+export async function createPrototypeSet(prototypes = []) {
+  const newRef = push(ref(db, "prototypes"));
+  const id = newRef.key;
+
+  const list = Array.isArray(prototypes) ? prototypes : [];
+  const normalized = list.map((p) => ({
+    text: String(p.text ?? ""),
+    color: normalizeColor(p.color ?? "38bdf8"),
+    description: String(p.description ?? ""),
+  }));
+
+  const data = { prototypes: normalized, createdAt: Date.now() };
+  await set(newRef, data);
+  return { id, data };
+}
+
+/**
+ * Loads /prototypes/<id> and returns the object (or null if missing).
+ * Shape: { prototypes?: Array<{text,color,description}>, createdAt?, updatedAt? }
+ * @param {string} id
+ */
+export async function loadPrototypeSet(id) {
+  if (!id) return null;
+  const snap = await get(ref(db, `prototypes/${id}`));
+  return snap.val();
+}
+
+/**
+ * Overwrites /prototypes/<id> with the given prototypes list.
+ * Colors are normalized to 6-hex digits without '#'; description is optional string.
+ *
+ * @param {string} id
+ * @param {Array<{text?:string,color?:string,description?:string}>} prototypes
+ */
+export async function savePrototypeSet(id, prototypes = []) {
+  if (!id) throw new Error("Missing prototype id");
+  const list = Array.isArray(prototypes) ? prototypes : [];
+  const normalized = list.map((p) => ({
+    text: String(p.text ?? ""),
+    color: normalizeColor(p.color ?? "38bdf8"),
+    description: String(p.description ?? ""),
+  }));
+  const data = { prototypes: normalized, updatedAt: Date.now() };
+  await set(ref(db, `prototypes/${id}`), data);
 }
 
 /** Build a shareable URL with ?id=<id> for the current page */
