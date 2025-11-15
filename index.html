@@ -3,183 +3,365 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Bubble Canvas (Table Layout)</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="merged.css">
+  <title>Bubble Organizer – Instances</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/merged.css" />
+  <style>
+    .landing-shell {
+      max-width: 960px;
+      margin: 40px auto;
+      padding: 24px;
+    }
+    .landing-card {
+      background: var(--panel, #ffffff);
+      border-radius: 20px;
+      padding: 24px 24px 28px;
+      box-shadow: 0 25px 80px rgba(15, 23, 42, 0.08);
+      border: 1px solid rgba(15, 23, 42, 0.05);
+    }
+    .landing-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .landing-title {
+      font-size: clamp(1.5rem, 4vw, 2.25rem);
+      margin: 0;
+    }
+    .landing-subtitle {
+      margin: 4px 0 0;
+      color: var(--muted, #64748b);
+      max-width: 60ch;
+      font-size: 0.95rem;
+    }
+    .landing-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .landing-input {
+      flex: 1 1 220px;
+      min-width: 0;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--border, #e2e8f0);
+      font-family: inherit;
+      font-size: 0.95rem;
+    }
+    .landing-button {
+      padding: 9px 14px;
+      border-radius: 999px;
+      border: none;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent, #22d3ee);
+      color: #ffffff;
+      box-shadow: 0 6px 18px rgba(34, 211, 238, 0.35);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .landing-button.secondary {
+      background: var(--panel-2, #f8fafc);
+      color: var(--text, #0f172a);
+      box-shadow: none;
+      border: 1px solid var(--border, #e2e8f0);
+    }
+    .landing-status {
+      margin-bottom: 16px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.04);
+      color: var(--muted, #64748b);
+      font-size: 0.9rem;
+    }
+    .instance-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 4px;
+    }
+    .instance-card {
+      border-radius: 16px;
+      border: 1px solid var(--border, #e2e8f0);
+      background: #ffffff;
+      padding: 12px 14px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease;
+    }
+    .instance-card:hover {
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+      transform: translateY(-1px);
+      border-color: var(--accent, #22d3ee);
+    }
+    .instance-id {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+    .instance-meta {
+      font-size: 0.82rem;
+      color: var(--muted, #64748b);
+    }
+    .empty-state {
+      margin-top: 6px;
+      font-size: 0.9rem;
+      color: var(--muted, #64748b);
+    }
+    @media (max-width: 640px) {
+      .landing-shell {
+        margin: 16px auto 32px;
+        padding: 16px;
+      }
+      .landing-card {
+        padding: 18px 16px 22px;
+        border-radius: 18px;
+      }
+    }
+  </style>
 </head>
 <body>
-  <!-- Sidebar Backdrop (for mobile) -->
-  <div id="sidebarBackdrop" class="sidebar-backdrop" aria-hidden="true"></div>
-
-  <div class="app" role="application" aria-label="Bubble canvas app">
-    <aside id="sidebar" class="sidebar" aria-label="Bubble library">
-      <header>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10v10H7z" stroke="#38bdf8" stroke-width="1.5"/><path d="M12 4v16M4 12h16" stroke="#22d3ee" stroke-width="1.5"/></svg>
-        Bubble Library
-        <button id="closeSidebar" class="close-btn" aria-label="Close library" title="Close">&times;</button>
+  <div class="landing-shell">
+    <section class="landing-card" aria-live="polite">
+      <header class="landing-header">
+        <div>
+          <h1 class="landing-title">Bubble Organizer</h1>
+          <p class="landing-subtitle">
+            Jump into an existing planner by id, or create a new prototype and its first instance.
+          </p>
+        </div>
       </header>
-      <div class="hint">Drag a bubble onto the canvas to create an instance.</div>
 
-      <div id="templates" class="bubbles-list" aria-live="polite"></div>
-
-      <button id="addBtn" class="add-btn" aria-label="Add bubble">+ Add bubble</button>
-    </aside>
-
-    <main>
-      <div class="toolbar">
-        <button id="menuBtn" class="menu-btn" aria-controls="sidebar" aria-expanded="false" aria-label="Open menu">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12h18M3 6h18M3 18h18" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round"/></svg>
+      <div class="landing-actions">
+        <input
+          id="idInput"
+          class="landing-input"
+          type="text"
+          placeholder="Paste an instance or prototype id…"
+          aria-label="Instance or prototype id" />
+        <button id="goBtn" class="landing-button" type="button">
+          Open
         </button>
-        <div class="toolbar-title">Weekly Planner</div>
-        <button id="editBtn" class="edit-btn" aria-pressed="false" aria-label="Toggle edit mode" title="Edit">Edit</button>
+        <button id="createBtn" class="landing-button secondary" type="button">
+          + New planner
+        </button>
       </div>
 
-      <div class="week-container">
-        <div class="day-view">
-          <table class="week-table" role="grid">
-            <thead>
-              <tr>
-                <th>Monday</th>
-                <th>Tuesday</th>
-                <th>Wednesday</th>
-                <th>Thursday</th>
-                <th>Friday</th>
-                <th>Saturday</th>
-                <th>Sunday</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td data-day="Mon">
-                  <!-- Accordion header hidden by default, shown on mobile via media query -->
-                  <button class="day-accordion__header" aria-expanded="true" aria-controls="day-content-0">
-                    <span class="label">Monday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <!-- Accordion content forced open on desktop via CSS, collapsible on mobile -->
-                  <div id="day-content-0" class="day-accordion__content" aria-hidden="false">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="0" role="group" aria-label="Monday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-                <td data-day="Tue">
-                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-1">
-                    <span class="label">Tuesday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <div id="day-content-1" class="day-accordion__content" aria-hidden="true">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="1" role="group" aria-label="Tuesday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-                <td data-day="Wed">
-                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-2">
-                    <span class="label">Wednesday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <div id="day-content-2" class="day-accordion__content" aria-hidden="true">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="2" role="group" aria-label="Wednesday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-                <td data-day="Thu">
-                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-3">
-                    <span class="label">Thursday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <div id="day-content-3" class="day-accordion__content" aria-hidden="true">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="3" role="group" aria-label="Thursday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-                <td data-day="Fri">
-                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-4">
-                    <span class="label">Friday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <div id="day-content-4" class="day-accordion__content" aria-hidden="true">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="4" role="group" aria-label="Friday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-                <td data-day="Sat">
-                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-5">
-                    <span class="label">Saturday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <div id="day-content-5" class="day-accordion__content" aria-hidden="true">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="5" role="group" aria-label="Saturday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-                <td data-day="Sun">
-                  <button class="day-accordion__header" aria-expanded="false" aria-controls="day-content-6">
-                    <span class="label">Sunday</span>
-                    <svg class="chev" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m5 15 7-7 7 7" stroke="#0f172a" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  </button>
-                  <div id="day-content-6" class="day-accordion__content" aria-hidden="true">
-                    <div class="day-flow-container">
-                      <div class="day-flow" data-day-index="6" role="group" aria-label="Sunday Tasks"></div>
-                    </div>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
-  </div>
-  <div id="trash" class="trash-zone" aria-hidden="true" aria-label="Delete dropzone">
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 6h18M9 6v-1a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v1M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" stroke="#e5e7eb" stroke-width="1.5"/><path d="M10 10v8M14 10v8" stroke="#fff5f5" stroke-width="1.5"/></svg>
-    <div class="label">Drop to delete</div>
+      <div id="status" class="landing-status">Waiting for an id. Provide a composite or prototype id, or create a new planner.</div>
+      <div id="instancesContainer"></div>
+    </section>
   </div>
 
-  <!-- New Bubble Modal -->
-  <div id="modal" class="modal" hidden>
-    <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
-      <h2 id="dlg-title">Create a new bubble</h2>
-      <form id="newBubbleForm">
-        <div class="form-row">
-          <label for="bubbleText">Bubble text</label>
-          <input id="bubbleText" name="bubbleText" type="text" placeholder="e.g. Idea, Todo, Person..." required minlength="1" />
-        </div>
-        <div class="form-row">
-          <label for="bubbleDescription">Description</label>
-          <input id="bubbleDescription" name="bubbleDescription" type="text" placeholder="Optional description" />
-        </div>
-        <div class="form-row" id="bubbleTimeFormRow" hidden>
-          <label for="bubbleTime">Time (HH:MM:SS)</label>
-          <input id="bubbleTime" name="bubbleTime" type="time" step="1" />
-        </div>
-        <div class="form-row">
-          <label>Color</label>
-          <div class="color-swatch-group" role="radiogroup" aria-label="Select bubble color">
-            <input type="radio" id="color-blue" name="bubbleColor" value="#38bdf8" checked><label for="color-blue" style="background-color: #38bdf8;" title="Blue"></label>
-            <input type="radio" id="color-purple" name="bubbleColor" value="#a78bfa"><label for="color-purple" style="background-color: #a78bfa;" title="Purple"></label>
-            <input type="radio" id="color-red" name="bubbleColor" value="#f87171"><label for="color-red" style="background-color: #f87171;" title="Red"></label>
-            <input type="radio" id="color-green" name="bubbleColor" value="#10b981"><label for="color-green" style="background-color: #10b981;" title="Green"></label>
-            <input type="radio" id="color-yellow" name="bubbleColor" value="#facc15"><label for="color-yellow" style="background-color: #facc15;" title="Yellow"></label>
-            <!-- Add custom color button + hidden color input -->
-            <button type="button" id="addColorBtn" class="color-add-btn" aria-label="Add custom color" title="Add color">+</button>
-            <input type="color" id="customColorPicker" value="#38bdf8" class="sr-only-color-picker">
-          </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button type="button" id="cancelBtn">Cancel</button>
-          <button type="submit" id="submitBtn">Create Bubble</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <script type="module">
+    import {
+      PROTOTYPE_ID_LENGTH,
+      createPrototypeSet,
+      loadPrototypeSet,
+      createInstance
+    } from '/instances.js';
 
-  <script type="module" src="merged.js"></script>
+    const idInput = document.getElementById('idInput');
+    const goBtn = document.getElementById('goBtn');
+    const createBtn = document.getElementById('createBtn');
+    const statusEl = document.getElementById('status');
+    const instancesContainer = document.getElementById('instancesContainer');
+
+    function setStatus(message) {
+      if (!statusEl) return;
+      statusEl.textContent = message;
+    }
+
+    function clearInstances() {
+      if (instancesContainer) {
+        instancesContainer.innerHTML = '';
+      }
+    }
+
+    function parseCompositeId(id) {
+      if (!id) return { prototypeId: null, instanceNumber: null };
+      const raw = String(id);
+      if (!Number.isFinite(PROTOTYPE_ID_LENGTH) || PROTOTYPE_ID_LENGTH <= 0) {
+        return { prototypeId: null, instanceNumber: null };
+      }
+      if (raw.length <= PROTOTYPE_ID_LENGTH) {
+        return { prototypeId: null, instanceNumber: null };
+      }
+      const prototypeId = raw.slice(0, PROTOTYPE_ID_LENGTH);
+      const suffix = raw.slice(PROTOTYPE_ID_LENGTH);
+      const n = Number.parseInt(suffix, 10);
+      if (!Number.isFinite(n) || n < 0) {
+        return { prototypeId: null, instanceNumber: null };
+      }
+      return { prototypeId, instanceNumber: n };
+    }
+
+    function getInstanceNumbers(protoDoc) {
+      if (!protoDoc || typeof protoDoc !== 'object') return [];
+      const map = protoDoc.instances && typeof protoDoc.instances === 'object'
+        ? protoDoc.instances
+        : {};
+      const out = [];
+      for (const key of Object.keys(map)) {
+        const n = Number.parseInt(key, 10);
+        if (Number.isFinite(n) && n >= 0) out.push(n);
+      }
+      out.sort((a, b) => a - b);
+      return out;
+    }
+
+    function nextFreeInstanceNumber(numbers) {
+      let candidate = 0;
+      for (const n of numbers) {
+        if (n === candidate) {
+          candidate += 1;
+        } else if (n > candidate) {
+          break;
+        }
+      }
+      return candidate;
+    }
+
+    function renderInstanceList(prototypeId, numbers) {
+      clearInstances();
+      if (!instancesContainer) return;
+
+      if (!numbers.length) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.textContent = 'No instances found for this prototype yet.';
+        instancesContainer.appendChild(empty);
+        return;
+      }
+
+      const grid = document.createElement('div');
+      grid.className = 'instance-grid';
+
+      numbers.forEach((n) => {
+        const compositeId = `${prototypeId}${n}`;
+        const card = document.createElement('button');
+        card.type = 'button';
+        card.className = 'instance-card';
+        card.addEventListener('click', () => {
+          window.location.href = `/edit/?id=${encodeURIComponent(compositeId)}`;
+        });
+
+        const title = document.createElement('div');
+        title.className = 'instance-id';
+        title.textContent = `Instance #${n}`;
+
+        const meta = document.createElement('div');
+        meta.className = 'instance-meta';
+        meta.textContent = compositeId;
+
+        card.appendChild(title);
+        card.appendChild(meta);
+        grid.appendChild(card);
+      });
+
+      instancesContainer.appendChild(grid);
+    }
+
+    async function ensureInstanceForPrototype(prototypeId) {
+      const doc = await loadPrototypeSet(prototypeId);
+      const numbers = getInstanceNumbers(doc);
+      const next = nextFreeInstanceNumber(numbers);
+      const compositeId = `${prototypeId}${next}`;
+      await createInstance({ id: compositeId, prototypeId, instanceNumber: next });
+      return { compositeId, instanceNumber: next };
+    }
+
+    async function handleId(rawId) {
+      const id = String(rawId || '').trim();
+      if (!id) {
+        setStatus('Waiting for an id. Provide a composite or prototype id, or create a new planner.');
+        clearInstances();
+        return;
+      }
+
+      const parsed = parseCompositeId(id);
+      if (parsed.prototypeId && parsed.instanceNumber !== null && parsed.instanceNumber >= 0) {
+        window.location.href = `/edit/?id=${encodeURIComponent(id)}`;
+        return;
+      }
+
+      setStatus('Looking up prototype…');
+      clearInstances();
+
+      try {
+        const protoDoc = await loadPrototypeSet(id);
+        if (!protoDoc) {
+          setStatus('No prototype found with this id.');
+          return;
+        }
+
+        const nums = getInstanceNumbers(protoDoc);
+        if (!nums.length) {
+          setStatus('Prototype found, but there are no instances yet. Create a new one below.');
+        } else {
+          setStatus('Prototype found. Choose an instance to open, or create another.');
+        }
+        renderInstanceList(id, nums);
+      } catch (e) {
+        console.warn('Failed to load prototype', e);
+        setStatus('Something went wrong while loading this prototype.');
+      }
+    }
+
+    async function handleCreateNew() {
+      setStatus('Creating a new prototype and its first instance…');
+      clearInstances();
+
+      const seedList = [
+        { text: 'Task', color: '38bdf8', description: '' },
+        { text: 'Idea', color: 'a78bfa', description: '' },
+        { text: 'Bug', color: 'f87171', description: '' },
+        { text: 'Note', color: '10b981', description: '' },
+      ];
+
+      try {
+        const created = await createPrototypeSet(seedList);
+        const prototypeId = created.id;
+        const { compositeId } = await ensureInstanceForPrototype(prototypeId);
+        window.location.href = `/edit/?id=${encodeURIComponent(compositeId)}`;
+      } catch (e) {
+        console.warn('Failed to create new instance', e);
+        setStatus('Could not create a new planner right now. Please try again.');
+      }
+    }
+
+    goBtn?.addEventListener('click', () => {
+      handleId(idInput?.value || '');
+    });
+
+    idInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        handleId(idInput.value || '');
+      }
+    });
+
+    createBtn?.addEventListener('click', () => {
+      handleCreateNew();
+    });
+
+    const url = new URL(window.location.href);
+    const initialId = url.searchParams.get('id') || '';
+    if (initialId && idInput) {
+      idInput.value = initialId;
+    }
+
+    if (initialId) {
+      handleId(initialId);
+    } else {
+      setStatus('Waiting for an id. Provide a composite or prototype id, or create a new planner.');
+    }
+  </script>
 </body>
 </html>

@@ -70,6 +70,19 @@ export async function createInstance(extra = {}) {
   const { id: _omitId, ...rest } = payload;
   const data = { days: makeDays(), createdAt: Date.now(), ...rest };
   await set(instanceRef, data);
+
+  // If this instance is tied to a prototype/composite id, also
+  // record the numeric instance suffix under /prototypes/<prototypeId>/instances.
+  const prototypeId = payload.prototypeId;
+  const instanceNumberRaw = payload.instanceNumber;
+  const instanceNumber = Number.isFinite(Number(instanceNumberRaw))
+    ? Number(instanceNumberRaw)
+    : null;
+  if (prototypeId && instanceNumber && instanceNumber > 0) {
+    const nKey = String(instanceNumber);
+    await set(ref(db, `prototypes/${prototypeId}/instances/${nKey}`), true);
+  }
+
   return { id, data };
 }
 
@@ -133,7 +146,19 @@ export async function savePrototypeSet(id, prototypes = []) {
     color: normalizeColor(p.color ?? "38bdf8"),
     description: String(p.description ?? ""),
   }));
-  const data = { prototypes: normalized, updatedAt: Date.now() };
+
+  // Preserve any existing metadata on /prototypes/<id> (e.g. instances index)
+  let existing = null;
+  try {
+    const snap = await get(ref(db, `prototypes/${id}`));
+    const value = snap.val();
+    existing = value && typeof value === "object" ? value : null;
+  } catch {
+    existing = null;
+  }
+
+  const base = existing || {};
+  const data = { ...base, prototypes: normalized, updatedAt: Date.now() };
   await set(ref(db, `prototypes/${id}`), data);
 }
 
