@@ -13,6 +13,7 @@ import {
   loadPrototypeSet,
   savePrototypeSet,
   saveColorStatsToDb,
+  saveInstanceLabel,
 } from './instances.js';
 
 // Prevent native drag ghost and context menu interfering with custom DnD
@@ -59,6 +60,20 @@ document.addEventListener('DOMContentLoaded', () => {
   let recordColorUsage = () => {};
   let sortSwatchesByUsage = () => {};
   let recordPrototypeUsage = () => {};
+
+  // Toolbar title: initial visibility is controlled via CSS.
+  // We only reveal it once we have the correct label.
+  const toolbarTitleEl = document.querySelector('.toolbar-title');
+  if (toolbarTitleEl) {
+    toolbarTitleEl.dataset.defaultTitle = toolbarTitleEl.textContent || 'Weekly Planner';
+  }
+
+  function setToolbarTitle(label) {
+    if (!toolbarTitleEl) return;
+    const text = String(label || '').trim() || toolbarTitleEl.dataset.defaultTitle || 'Weekly Planner';
+    toolbarTitleEl.textContent = text;
+    toolbarTitleEl.style.visibility = 'visible';
+  }
 
   // Custom color FIFO history for modal color swatches
   (function setupCustomColorPicker(){
@@ -130,8 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem(COLOR_STATS_KEY, JSON.stringify(colorStats));
       } catch {}
       try {
-        // Also persist color stats to Firebase under /prototypes/colors
-        saveColorStatsToDb(colorStats).catch(() => {});
+        // Also persist color stats to Firebase under /prototypes/<id>/colors
+        if (typeof currentPrototypeId === 'string' && currentPrototypeId) {
+          saveColorStatsToDb(currentPrototypeId, colorStats).catch(() => {});
+        }
       } catch {}
     }
 
@@ -790,6 +807,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const LS_INSTANCE_COUNTER_PREFIX = 'organizer:instanceCounter:';
   let currentInstanceId = null;
   let currentPrototypeId = null;
+  let currentInstanceNumber = null;
 
   function dayIndexToName(i) { return DAYS[i] || null; }
 
@@ -809,7 +827,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const prototypeId = raw.slice(0, PROTOTYPE_ID_LENGTH);
     const suffix = raw.slice(PROTOTYPE_ID_LENGTH);
     const n = Number.parseInt(suffix, 10);
-    if (!Number.isFinite(n) || n <= 0) {
+    if (!Number.isFinite(n) || n < 0) {
       return { prototypeId: null, instanceNumber: null };
     }
     return { prototypeId, instanceNumber: n };
@@ -851,9 +869,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let rawId = fromUrl || fromLS || null;
 
     const parsed = parseCompositeInstanceId(rawId);
-    const hasComposite = !!(parsed.prototypeId && parsed.instanceNumber);
+    const hasComposite = !!(parsed.prototypeId && parsed.instanceNumber !== null && parsed.instanceNumber >= 0);
     let prototypeId = parsed.prototypeId || null;
-    let instanceNumber = parsed.instanceNumber || null;
+    let instanceNumber = (parsed.instanceNumber !== null && parsed.instanceNumber >= 0)
+      ? parsed.instanceNumber
+      : null;
 
     let prototypesPayload = null;
 
@@ -926,6 +946,10 @@ document.addEventListener('DOMContentLoaded', () => {
       } else {
         bubbleManager.renderInitialPrototypes();
       }
+      // Show default title for legacy instances
+      try {
+        setToolbarTitle(toolbarTitleEl && toolbarTitleEl.dataset.defaultTitle);
+      } catch {}
       return { id: rawId, prototypeId: null };
     }
 
@@ -966,15 +990,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     currentInstanceId = compositeId;
     currentPrototypeId = prototypeId;
+    currentInstanceNumber = instanceNumber;
 
     // Ensure instance document exists for this id.
     try {
       const existing = await loadInstance(compositeId);
       if (!existing) {
-        await createInstance({ id: compositeId, prototypeId, instanceNumber });
+        const defaultLabel = `Instance #${instanceNumber != null ? instanceNumber : ''}`.trim();
+        await createInstance({ id: compositeId, prototypeId, instanceNumber, instanceLabel: defaultLabel });
       }
     } catch (e) {
       console.warn('Failed to ensure instance document', e);
+    }
+
+    // If we can, load a human-friendly instance label from
+    // /prototypes/<prototypeId>/instances/<n> and use it for
+    // the toolbar title in the editor instead of the generic
+    // "Weekly Planner" text.
+    try {
+      if (prototypeId && instanceNumber !== null && instanceNumber >= 0) {
+        const protoDoc = await loadPrototypeSet(prototypeId);
+        if (protoDoc && protoDoc.instances && typeof protoDoc.instances === 'object') {
+          const rawLabel = protoDoc.instances[String(instanceNumber)];
+          const label = (typeof rawLabel === 'string' && rawLabel.trim())
+            ? rawLabel.trim()
+            : toolbarTitleEl && toolbarTitleEl.dataset.defaultTitle;
+          setToolbarTitle(label);
+        } else {
+          setToolbarTitle(toolbarTitleEl && toolbarTitleEl.dataset.defaultTitle);
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load instance label for toolbar title', e);
+      try {
+        setToolbarTitle(toolbarTitleEl && toolbarTitleEl.dataset.defaultTitle);
+      } catch {}
     }
 
     // Build sidebar prototype list (from DB payload or defaults), then sort by usage.
@@ -1372,12 +1422,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   function setEditMode(on) {
+    let titleInput = document.getElementById('instanceTitleInput');
+
     isEditMode = !!on;
     document.body.classList.toggle('edit-mode', isEditMode);
     try { editBtn.setAttribute('aria-pressed', isEditMode ? 'true' : 'false'); } catch {}
     try { editBtn.textContent = isEditMode ? 'Done' : 'Edit'; } catch {}
     dragController.setCanvasDragEnabled(!isEditMode);
     try { dragController.setEditMode(isEditMode); } catch {}
+
+    // When entering edit mode, replace the static title with an editable textbox.
+    if (isEditMode && toolbarTitleEl) {
+      if (!titleInput) {
+        titleInput = document.createElement('input');
+        titleInput.type = 'text';
+        titleInput.id = 'instanceTitleInput';
+        titleInput.className = 'toolbar-title-input';
+        titleInput.setAttribute('aria-label', 'Planner name');
+        toolbarTitleEl.parentNode.insertBefore(titleInput, toolbarTitleEl.nextSibling);
+      }
+      titleInput.value = toolbarTitleEl.textContent || '';
+      toolbarTitleEl.style.display = 'none';
+      titleInput.style.display = '';
+      try { titleInput.focus(); titleInput.select(); } catch {}
+    }
+
+    // When leaving edit mode, persist any edited title to Firebase
+    // and switch back to static text.
+    if (!isEditMode && toolbarTitleEl && titleInput) {
+      const newLabel = String(titleInput.value || '').trim();
+      const labelToUse = newLabel || (toolbarTitleEl.textContent || 'Weekly Planner');
+      toolbarTitleEl.textContent = labelToUse;
+      titleInput.style.display = 'none';
+      toolbarTitleEl.style.display = '';
+
+      // Persist label under /prototypes/<prototypeId>/instances/<instanceNumber>
+      if (currentPrototypeId && currentInstanceNumber !== null && currentInstanceNumber >= 0) {
+        try {
+          saveInstanceLabel(currentPrototypeId, currentInstanceNumber, labelToUse).catch(() => {});
+        } catch {}
+      }
+    }
   }
 
   if (editBtn) {

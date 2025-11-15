@@ -124,6 +124,13 @@
     .toolbar-title{
       font-weight:700;
       color:var(--text);
+      visibility:hidden;
+    }
+    .toolbar-title-input{
+      font-family:inherit;
+      font-size:inherit;
+      font-weight:700;
+      color:var(--text);
     }
 
     /* Week Table Layout */
@@ -579,7 +586,8 @@
       .menu-btn{
         display:block;
       }
-      .toolbar-title{
+      .toolbar-title,
+      .toolbar-title-input{
         font-size:18px;
       }
 

@@ -72,15 +72,27 @@ export async function createInstance(extra = {}) {
   await set(instanceRef, data);
 
   // If this instance is tied to a prototype/composite id, also
-  // record the numeric instance suffix under /prototypes/<prototypeId>/instances.
+  // record the numeric instance suffix (and optional label) under
+  // /prototypes/<prototypeId>/instances.
   const prototypeId = payload.prototypeId;
   const instanceNumberRaw = payload.instanceNumber;
-  const instanceNumber = Number.isFinite(Number(instanceNumberRaw))
-    ? Number(instanceNumberRaw)
-    : null;
-  if (prototypeId && instanceNumber && instanceNumber > 0) {
+  let instanceNumber = null;
+  if (Number.isFinite(Number(instanceNumberRaw))) {
+    const n = Number(instanceNumberRaw);
+    if (Number.isFinite(n) && n >= 0) {
+      instanceNumber = n;
+    }
+  }
+  if (prototypeId && instanceNumber !== null && instanceNumber >= 0) {
     const nKey = String(instanceNumber);
-    await set(ref(db, `prototypes/${prototypeId}/instances/${nKey}`), true);
+    let label = '';
+    const labelRaw = payload.instanceLabel;
+    if (typeof labelRaw === "string" && labelRaw.trim()) {
+      label = labelRaw.trim();
+    } else {
+      label = `Instance #${nKey}`;
+    }
+    await set(ref(db, `prototypes/${prototypeId}/instances/${nKey}`), label);
   }
 
   return { id, data };
@@ -163,14 +175,17 @@ export async function savePrototypeSet(id, prototypes = []) {
 }
 
 /**
- * Persist color statistics under /prototypes/colors.
+ * Persist color statistics under /prototypes/<prototypeId>/colors.
  * Accepts a map of color keys (e.g. "#38bdf8" or "38bdf8") to
  * { useCount, lastUsed, createdAt } objects and normalizes keys
  * to 6-hex digits without "#" for Firebase-safe paths.
  *
+ * @param {string} prototypeId
  * @param {Record<string, {useCount?:number,lastUsed?:number,createdAt?:number}>} stats
  */
-export async function saveColorStatsToDb(stats = {}) {
+export async function saveColorStatsToDb(prototypeId, stats = {}) {
+  if (!prototypeId) return;
+
   const out = {};
   if (stats && typeof stats === "object") {
     for (const [key, value] of Object.entries(stats)) {
@@ -191,7 +206,24 @@ export async function saveColorStatsToDb(stats = {}) {
       }
     }
   }
-  await set(ref(db, "prototypes/colors"), out);
+  await set(ref(db, `prototypes/${prototypeId}/colors`), out);
+}
+
+/**
+ * Persist a human-readable label for a given prototype instance number
+ * under /prototypes/<prototypeId>/instances/<instanceNumber>.
+ *
+ * @param {string} prototypeId
+ * @param {number} instanceNumber
+ * @param {string} label
+ */
+export async function saveInstanceLabel(prototypeId, instanceNumber, label) {
+  if (!prototypeId) return;
+  const n = Number.isFinite(Number(instanceNumber)) ? Number(instanceNumber) : null;
+  if (n === null || n < 0) return;
+  const nKey = String(n);
+  const safeLabel = String(label ?? '').trim() || `Instance #${nKey}`;
+  await set(ref(db, `prototypes/${prototypeId}/instances/${nKey}`), safeLabel);
 }
 
 /** Build a shareable URL with ?id=<id> for the current page */
