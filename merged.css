@@ -716,11 +716,17 @@
     .form-row{
       margin-bottom:16px;
     }
-    .form-row label{
+    .form-row label,
+    .form-row legend{
       display:block;
       font-weight:600;
       margin-bottom:4px;
       font-size:14px;
+    }
+    .form-row fieldset{
+      border:0;
+      margin:0;
+      padding:0;
     }
     .form-row input[type="text"],
     .form-row input[type="time"]{

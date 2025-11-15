@@ -159,8 +159,9 @@
           <input id="bubbleTime" name="bubbleTime" type="time" step="1" />
         </div>
         <div class="form-row">
-          <label>Color</label>
-          <div class="color-swatch-group" role="radiogroup" aria-label="Select bubble color">
+          <fieldset>
+            <legend>Color</legend>
+            <div class="color-swatch-group" role="radiogroup" aria-label="Select bubble color">
             <input type="radio" id="color-blue" name="bubbleColor" value="#38bdf8" checked><label for="color-blue" style="background-color: #38bdf8;" title="Blue"></label>
             <input type="radio" id="color-purple" name="bubbleColor" value="#a78bfa"><label for="color-purple" style="background-color: #a78bfa;" title="Purple"></label>
             <input type="radio" id="color-red" name="bubbleColor" value="#f87171"><label for="color-red" style="background-color: #f87171;" title="Red"></label>
@@ -169,7 +170,8 @@
             <!-- Add custom color button + hidden color input -->
             <button type="button" id="addColorBtn" class="color-add-btn" aria-label="Add custom color" title="Add color">+</button>
             <input type="color" id="customColorPicker" value="#38bdf8" class="sr-only-color-picker">
-          </div>
+            </div>
+          </fieldset>
         </div>
         
         <div class="modal-actions">
