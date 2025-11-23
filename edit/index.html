@@ -15,7 +15,7 @@
     <aside id="sidebar" class="sidebar" aria-label="Bubble library">
       <header>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 7h10v10H7z" stroke="#38bdf8" stroke-width="1.5"/><path d="M12 4v16M4 12h16" stroke="#22d3ee" stroke-width="1.5"/></svg>
-        Bubble Library
+        <span class="sidebar-title-text">Bubble Library</span>
         <button id="closeSidebar" class="close-btn" aria-label="Close library" title="Close">&times;</button>
       </header>
       <div class="hint">Drag a bubble onto the canvas to create an instance.</div>
@@ -155,8 +155,12 @@
           <input id="bubbleDescription" name="bubbleDescription" type="text" placeholder="Optional description" />
         </div>
         <div class="form-row" id="bubbleTimeFormRow" hidden>
-          <label for="bubbleTime">Time (HH:MM:SS)</label>
-          <input id="bubbleTime" name="bubbleTime" type="time" step="1" />
+          <label for="bubbleTimeHour">Time (HH:MM:SS)</label>
+          <div class="time-inputs">
+            <input id="bubbleTimeHour" name="bubbleTimeHour" type="number" min="0" max="23" step="1" inputmode="numeric" placeholder="HH" />
+            <input id="bubbleTimeMinute" name="bubbleTimeMinute" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="MM" />
+            <input id="bubbleTimeSecond" name="bubbleTimeSecond" type="number" min="0" max="59" step="1" inputmode="numeric" placeholder="SS" />
+          </div>
         </div>
         <div class="form-row">
           <fieldset>

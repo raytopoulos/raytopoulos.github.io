@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="el">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -172,6 +172,8 @@
       color: var(--bubble-text, #0f172a);
       transition: transform 150ms ease, box-shadow 150ms ease;
       width: 100%;
+      align-items: center;
+      text-align: center;
     }
 
     .bubble-rect:hover {
@@ -214,22 +216,21 @@
 <body>
   <div class="view-shell">
     <header class="view-header">
-      <h1>Weekly Bubble Snapshot</h1>
-      <p>Read-only table view of saved bubbles. Append <code>?id=&lt;instance-id&gt;</code> to the URL to show a specific board. Rows are unique timestamps (earliest -> latest); columns are days.</p>
+      <h1>Εβδομαδιαία αναφορά</h1>
     </header>
 
     <section class="table-card" aria-live="polite">
-      <div id="status" class="status" role="status">Waiting for an instance id...</div>
+      <div id="status" class="status" role="status">Αναμονή για αναγνωριστικό στιγμιότυπου...</div>
       <div class="table-wrapper">
         <table class="timeline-table" role="grid">
           <thead>
             <tr id="tableHeadRow">
-              <th scope="col">Time</th>
+              <th scope="col">Ώρα</th>
             </tr>
           </thead>
           <tbody id="timelineBody">
             <tr>
-              <td class="empty-row" colspan="8">Provide an instance id to load data.</td>
+              <td class="empty-row" colspan="8">Δώστε αναγνωριστικό στιγμιότυπου για φόρτωση δεδομένων.</td>
             </tr>
           </tbody>
         </table>
@@ -239,59 +240,109 @@
 
   <script type="module">
     import { loadInstance, DAYS } from '../instances.js';
-
-    const DAY_LABELS = {
-      monday: 'Monday',
-      tuesday: 'Tuesday',
-      wednesday: 'Wednesday',
-      thursday: 'Thursday',
-      friday: 'Friday',
-      saturday: 'Saturday',
-      sunday: 'Sunday',
-    };
+    import { i18n } from '../i18n.js';
 
     const statusEl = document.getElementById('status');
     const tableHeadRow = document.getElementById('tableHeadRow');
     const tableBody = document.getElementById('timelineBody');
-
-    DAYS.forEach((day) => {
-      const th = document.createElement('th');
-      th.scope = 'col';
-      th.textContent = DAY_LABELS[day] || day;
-      tableHeadRow.appendChild(th);
-    });
+    const viewTitleEl = document.querySelector('.view-header h1');
 
     const params = new URLSearchParams(window.location.search);
     const instanceId = (params.get('id') || '').trim();
+    let hasRenderedRows = false;
+    let lastStatusKey = 'viewStatusWaiting';
+    let lastStatusVariant = 'info';
+    let lastStatusVars = {};
+
+    function dayLabels() {
+      return {
+        monday: i18n.t('weekdayMon'),
+        tuesday: i18n.t('weekdayTue'),
+        wednesday: i18n.t('weekdayWed'),
+        thursday: i18n.t('weekdayThu'),
+        friday: i18n.t('weekdayFri'),
+        saturday: i18n.t('weekdaySat'),
+        sunday: i18n.t('weekdaySun'),
+      };
+    }
+
+    function buildHeadRow() {
+      const labels = dayLabels();
+      const timeTh = tableHeadRow.querySelector('th') || document.createElement('th');
+      timeTh.scope = 'col';
+      timeTh.textContent = i18n.t('viewTimeHeader');
+      if (!tableHeadRow.contains(timeTh)) {
+        tableHeadRow.appendChild(timeTh);
+      }
+      while (tableHeadRow.children.length > 1) {
+        tableHeadRow.removeChild(tableHeadRow.lastChild);
+      }
+      DAYS.forEach((day) => {
+        const th = document.createElement('th');
+        th.scope = 'col';
+        th.textContent = labels[day] || day;
+        tableHeadRow.appendChild(th);
+      });
+    }
+
+    function applyCopy() {
+      document.title = i18n.t('pageTitleView');
+      if (viewTitleEl) viewTitleEl.textContent = i18n.t('viewTitle');
+      buildHeadRow();
+      if (!hasRenderedRows && !instanceId) {
+        clearTable(i18n.t('viewEmptyPrompt'));
+      }
+      setStatusKey(lastStatusKey, lastStatusVariant, lastStatusVars);
+    }
+
+    function setStatus(message, variant) {
+      if (!message) {
+        statusEl.textContent = '';
+        statusEl.hidden = true;
+        return;
+      }
+      statusEl.hidden = false;
+      statusEl.textContent = message;
+      statusEl.dataset.variant = variant || 'info';
+    }
+
+    function setStatusKey(key, variant = 'info', vars = {}) {
+      lastStatusKey = key;
+      lastStatusVariant = variant;
+      lastStatusVars = vars;
+      setStatus(i18n.t(key, vars), variant);
+    }
+
+    applyCopy();
 
     if (!instanceId) {
-      setStatus('Add ?id=<instance-id> to the URL to render a saved board.', 'info');
+      setStatusKey('viewStatusNeedId', 'info');
     } else {
-      setStatus('Loading...', 'info');
+      setStatusKey('viewStatusLoading', 'info');
       bootstrap(instanceId);
     }
 
     async function bootstrap(id) {
-      clearTable('Loading timeline...');
+      clearTable(i18n.t('viewTableLoading'));
       try {
         const snap = await loadInstance(id);
         if (!snap || !snap.days) {
-          setStatus('Instance not found or has no data.', 'error');
-          clearTable('No data for this instance.');
+          setStatusKey('viewStatusNotFound', 'error');
+          clearTable(i18n.t('viewTableNoData'));
           return;
         }
         const rows = groupByTimestamp(snap.days);
         if (!rows.length) {
-          setStatus('No bubbles found for this instance.', 'info');
-          clearTable('No bubbles positioned yet.');
+          setStatusKey('viewStatusNoBubbles', 'info');
+          clearTable(i18n.t('viewTableNoBubbles'));
           return;
         }
         renderRows(rows);
-        setStatus(`Viewing instance ${id}`, 'success');
+        setStatusKey('viewStatusViewing', 'success', { id });
       } catch (err) {
         console.error('Failed to load instance', err);
-        setStatus('Unable to load data. Check the console for details.', 'error');
-        clearTable('Error loading data.');
+        setStatusKey('viewStatusError', 'error');
+        clearTable(i18n.t('viewTableError'));
       }
     }
 
@@ -351,11 +402,12 @@
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
         const ss = String(d.getSeconds()).padStart(2, '0');
-        const label = Number(ss) ? `${hh}:${mm}:${ss}` : `${hh}:${mm}`;
+        // Display resolution: HH:MM, but keep seconds in sort key so earliest wins.
+        const label = `${hh}:${mm}`;
         const sortValue = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
         return { key: `${hh}:${mm}:${ss}`, label, sortValue };
       }
-      return { key: '__no_time__', label: 'No Time', sortValue: Number.POSITIVE_INFINITY };
+      return { key: '__no_time__', label: i18n.t('viewNoTime'), sortValue: Number.POSITIVE_INFINITY };
     }
 
     function renderRows(rows) {
@@ -378,7 +430,7 @@
             wrapper.classList.add('cell-content--empty');
             const placeholder = document.createElement('span');
             placeholder.className = 'cell-placeholder';
-            placeholder.textContent = '--';
+            placeholder.textContent = i18n.t('viewCellPlaceholder');
             placeholder.setAttribute('aria-hidden', 'true');
             wrapper.appendChild(placeholder);
           } else {
@@ -396,6 +448,7 @@
         }
         tableBody.appendChild(tr);
       }
+      hasRenderedRows = true;
     }
 
     function renderBubble(item) {
@@ -407,7 +460,7 @@
 
       const title = document.createElement('div');
       title.className = 'bubble-title';
-      title.textContent = item.title || 'Untitled bubble';
+      title.textContent = item.title || i18n.t('viewBubbleUntitled');
       article.appendChild(title);
 
       if (item.description) {
@@ -445,6 +498,7 @@
 
     function clearTable(message) {
       tableBody.innerHTML = '';
+      hasRenderedRows = false;
       if (message) {
         const row = document.createElement('tr');
         const cell = document.createElement('td');
@@ -454,17 +508,6 @@
         row.appendChild(cell);
         tableBody.appendChild(row);
       }
-    }
-
-    function setStatus(message, variant) {
-      if (!message) {
-        statusEl.textContent = '';
-        statusEl.hidden = true;
-        return;
-      }
-      statusEl.hidden = false;
-      statusEl.textContent = message;
-      statusEl.dataset.variant = variant || 'info';
     }
   </script>
 </body>

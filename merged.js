@@ -1,6 +1,7 @@
 import { createAccordionController } from './accordion.js';
 import { createBubbleManager } from './bubble-manager.js';
 import { createDragController } from './drag-controller.js';
+import { i18n } from './i18n.js';
 import {
   createInstance,
   loadInstance,
@@ -51,29 +52,192 @@ document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('newBubbleForm');
   const cancelBtn = document.getElementById('cancelBtn');
   const submitBtn = document.getElementById('submitBtn');
-  const bubbleTextInput = document.getElementById('bubbleText');
+    const bubbleTextInput = document.getElementById('bubbleText');
   const bubbleDescriptionInput = document.getElementById('bubbleDescription');
-  const bubbleTimeInput = document.getElementById('bubbleTime');
+  const bubbleTimeHourInput = document.getElementById('bubbleTimeHour');
+  const bubbleTimeMinuteInput = document.getElementById('bubbleTimeMinute');
+  const bubbleTimeSecondInput = document.getElementById('bubbleTimeSecond');
   const bubbleTimeFormRow = document.getElementById('bubbleTimeFormRow');
   const colorGroup = document.querySelector('.color-swatch-group');
   const addColorBtn = document.getElementById('addColorBtn');
+  let modalPointerStartedInside = false;
   let recordColorUsage = () => {};
   let sortSwatchesByUsage = () => {};
   let recordPrototypeUsage = () => {};
+  let isEditMode = false;
+  let modalMode = 'create';
+  let editingEl = null;
 
   // Toolbar title: initial visibility is controlled via CSS.
   // We only reveal it once we have the correct label.
   const toolbarTitleEl = document.querySelector('.toolbar-title');
   if (toolbarTitleEl) {
-    toolbarTitleEl.dataset.defaultTitle = toolbarTitleEl.textContent || 'Weekly Planner';
+    toolbarTitleEl.dataset.defaultTitle = i18n.t('toolbarTitleDefault');
+    if (!toolbarTitleEl.textContent || toolbarTitleEl.textContent === 'Weekly Planner') {
+      toolbarTitleEl.textContent = i18n.t('toolbarTitleDefault');
+    }
   }
 
   function setToolbarTitle(label) {
     if (!toolbarTitleEl) return;
-    const text = String(label || '').trim() || toolbarTitleEl.dataset.defaultTitle || 'Weekly Planner';
+    const defaultTitle = toolbarTitleEl.dataset.defaultTitle || i18n.t('toolbarTitleDefault');
+    const text = String(label || '').trim() || defaultTitle;
     toolbarTitleEl.textContent = text;
     toolbarTitleEl.style.visibility = 'visible';
   }
+
+  function formatInstanceLabel(n) {
+    return i18n.t('instanceLabelTemplate', { n });
+  }
+
+  function getDefaultPrototypeSeedForDb() {
+    return [
+      { text: i18n.t('defaultPrototypeTask'), color: '38bdf8', description: '' },
+      { text: i18n.t('defaultPrototypeIdea'), color: 'a78bfa', description: '' },
+      { text: i18n.t('defaultPrototypeBug'), color: 'f87171', description: '' },
+      { text: i18n.t('defaultPrototypeNote'), color: '10b981', description: '' },
+    ];
+  }
+
+  function getDefaultPrototypesForUi() {
+    return getDefaultPrototypeSeedForDb().map((p) => ({
+      ...p,
+      color: `#${String(p.color || '').replace(/^#/, '')}`,
+    }));
+  }
+
+  function getDayNameList() {
+    return [
+      i18n.t('weekdayMon'),
+      i18n.t('weekdayTue'),
+      i18n.t('weekdayWed'),
+      i18n.t('weekdayThu'),
+      i18n.t('weekdayFri'),
+      i18n.t('weekdaySat'),
+      i18n.t('weekdaySun'),
+    ];
+  }
+
+  function applyDayTranslations() {
+    const dayNames = getDayNameList();
+    const headers = document.querySelectorAll('.week-table th');
+    headers.forEach((th, idx) => {
+      if (dayNames[idx]) th.textContent = dayNames[idx];
+    });
+    const accordionLabels = document.querySelectorAll('.day-accordion__header .label');
+    accordionLabels.forEach((labelEl, idx) => {
+      if (dayNames[idx]) labelEl.textContent = dayNames[idx];
+    });
+    const flows = document.querySelectorAll('.day-flow');
+    flows.forEach((flow, idx) => {
+      const label = i18n.t('weekdayTasks', { day: dayNames[idx] || '' });
+      flow.setAttribute('aria-label', label);
+      const cell = flow.closest('td[data-day]');
+      if (cell && dayNames[idx]) {
+        cell.setAttribute('data-day', dayNames[idx]);
+      }
+    });
+    dayAccordionHeaders?.forEach?.((btn, idx) => {
+      const label = i18n.t('weekdayTasks', { day: dayNames[idx] || '' });
+      btn.setAttribute('aria-label', label);
+    });
+  }
+
+  function applyEditorCopy() {
+    document.title = i18n.t('pageTitleEditor');
+    const appRoot = document.querySelector('.app');
+    if (appRoot) appRoot.setAttribute('aria-label', i18n.t('appAriaLabel'));
+    if (sidebar) {
+      sidebar.setAttribute('aria-label', i18n.t('sidebarTitle'));
+      const titleSpan = sidebar.querySelector('.sidebar-title-text');
+      if (titleSpan) titleSpan.textContent = i18n.t('sidebarTitle');
+    }
+    if (closeBtn) {
+      const closeLabel = i18n.t('sidebarClose');
+      closeBtn.setAttribute('aria-label', closeLabel);
+      closeBtn.title = closeLabel;
+    }
+    const hint = sidebar?.querySelector('.hint');
+    if (hint) hint.textContent = i18n.t('sidebarHint');
+    if (addBtn) {
+      addBtn.textContent = i18n.t('sidebarAdd');
+      addBtn.setAttribute('aria-label', i18n.t('sidebarAddAria'));
+    }
+    if (menuBtn) {
+      menuBtn.setAttribute('aria-label', i18n.t('toolbarMenu'));
+    }
+    if (toolbarTitleEl) {
+      const defaultTitle = i18n.t('toolbarTitleDefault');
+      const previousDefault = toolbarTitleEl.dataset.defaultTitle;
+      toolbarTitleEl.dataset.defaultTitle = defaultTitle;
+      if (!toolbarTitleEl.textContent || toolbarTitleEl.textContent === 'Weekly Planner' || (previousDefault && toolbarTitleEl.textContent === previousDefault)) {
+        toolbarTitleEl.textContent = defaultTitle;
+      }
+      toolbarTitleEl.style.visibility = 'visible';
+    }
+    if (editBtn) {
+      const editLabel = i18n.t('toolbarEditTooltip');
+      editBtn.textContent = isEditMode ? i18n.t('toolbarDone') : i18n.t('toolbarEdit');
+      editBtn.title = isEditMode ? i18n.t('toolbarDone') : editLabel;
+      editBtn.setAttribute('aria-label', editLabel);
+    }
+    const titleInput = document.getElementById('instanceTitleInput');
+    if (titleInput) {
+      titleInput.setAttribute('aria-label', i18n.t('toolbarNameAria'));
+    }
+    applyDayTranslations();
+    if (trashZone) {
+      trashZone.setAttribute('aria-label', i18n.t('trashAria'));
+      const label = trashZone.querySelector('.label');
+      if (label) label.textContent = i18n.t('trashLabel');
+    }
+    const dlgTitle = document.getElementById('dlg-title');
+    if (dlgTitle) dlgTitle.textContent = i18n.t('modalTitle');
+    const bubbleTextLabel = document.querySelector('label[for="bubbleText"]');
+    if (bubbleTextLabel) bubbleTextLabel.textContent = i18n.t('modalLabelText');
+    if (bubbleTextInput) bubbleTextInput.placeholder = i18n.t('modalPlaceholderText');
+    const bubbleDescLabel = document.querySelector('label[for="bubbleDescription"]');
+    if (bubbleDescLabel) bubbleDescLabel.textContent = i18n.t('modalLabelDescription');
+    if (bubbleDescriptionInput) bubbleDescriptionInput.placeholder = i18n.t('modalPlaceholderDescription');
+    const bubbleTimeLabel = document.querySelector('label[for="bubbleTimeHour"]');
+    if (bubbleTimeLabel) bubbleTimeLabel.textContent = i18n.t('modalLabelTime');
+    if (bubbleTimeHourInput) {
+      bubbleTimeHourInput.placeholder = 'HH';
+      bubbleTimeHourInput.setAttribute('aria-label', i18n.t('modalTimeHour'));
+    }
+    if (bubbleTimeMinuteInput) {
+      bubbleTimeMinuteInput.placeholder = 'MM';
+      bubbleTimeMinuteInput.setAttribute('aria-label', i18n.t('modalTimeMinute'));
+    }
+    if (bubbleTimeSecondInput) {
+      bubbleTimeSecondInput.placeholder = 'SS';
+      bubbleTimeSecondInput.setAttribute('aria-label', i18n.t('modalTimeSecond'));
+    }
+    const legend = document.querySelector('#newBubbleForm fieldset legend');
+    if (legend) legend.textContent = i18n.t('modalLegendColor');
+    if (colorGroup) colorGroup.setAttribute('aria-label', i18n.t('modalAriaColor'));
+    if (addColorBtn) {
+      addColorBtn.setAttribute('aria-label', i18n.t('modalAddColor'));
+      addColorBtn.title = i18n.t('modalAddColorTitle');
+    }
+    const colorTitles = [
+      { id: 'color-blue', title: i18n.t('colorBlue') },
+      { id: 'color-purple', title: i18n.t('colorPurple') },
+      { id: 'color-red', title: i18n.t('colorRed') },
+      { id: 'color-green', title: i18n.t('colorGreen') },
+      { id: 'color-yellow', title: i18n.t('colorYellow') },
+    ];
+    colorTitles.forEach(({ id, title }) => {
+      const labelEl = document.querySelector(`label[for="${id}"]`);
+      if (labelEl) labelEl.title = title;
+    });
+    if (cancelBtn) cancelBtn.textContent = i18n.t('modalCancel');
+    if (submitBtn) submitBtn.textContent = modalMode === 'create' ? i18n.t('modalSubmitCreate') : i18n.t('modalSubmitSave');
+  }
+  i18n.onChange(() => {
+    applyEditorCopy();
+  });
+  applyEditorCopy();
 
   // Custom color FIFO history for modal color swatches
   (function setupCustomColorPicker(){
@@ -363,10 +527,10 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="sv-plane"><div class="sv-thumb"></div></div>
             <div class="hue-bar"><div class="hue-thumb"></div></div>
           </div>
-          <input type="text" class="hex" aria-label="Hex color" />
+          <input type="text" class="hex" aria-label="${i18n.t('colorPickerHexLabel')}" />
           <div class="actions">
-            <button type="button" class="primary ok">OK</button>
-            <button type="button" class="cancel">Cancel</button>
+            <button type="button" class="primary ok">${i18n.t('colorPickerOk')}</button>
+            <button type="button" class="cancel">${i18n.t('modalCancel')}</button>
           </div>
         `;
         document.body.appendChild(confirmEl);
@@ -397,6 +561,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const hueThumb = confirmEl.querySelector('.hue-thumb');
         const inputHex = confirmEl.querySelector('.hex');
         const preview = confirmEl.querySelector('.preview');
+        if (ok) ok.textContent = i18n.t('colorPickerOk');
+        if (cancel) cancel.textContent = i18n.t('modalCancel');
+        if (inputHex) inputHex.setAttribute('aria-label', i18n.t('colorPickerHexLabel'));
         // HSV utilities
         function clamp(n, min, max){ return Math.min(max, Math.max(min, n)); }
         function hsvToRgb(h, s, v){
@@ -796,6 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dragController,
     refreshAccordionHeight: (index) => accordion.refreshHeight(index),
     getCurrentAccordionIndex: () => accordion.getCurrentOpenIndex(),
+    initialPrototypes: getDefaultPrototypesForUi(),
   });
   // Allow editing prototypes via bubble-manager
   if (bubbleManager && typeof bubbleManager.setPrototypeEditHandler === 'function') {
@@ -899,12 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
           description: p.description || '',
         }));
       } catch {
-        seedList = [
-          { text: 'Task', color: '38bdf8', description: '' },
-          { text: 'Idea', color: 'a78bfa', description: '' },
-          { text: 'Bug', color: 'f87171', description: '' },
-          { text: 'Note', color: '10b981', description: '' },
-        ];
+        seedList = getDefaultPrototypeSeedForDb();
       }
       const createdProto = await createPrototypeSet(seedList);
       prototypeId = createdProto.id;
@@ -944,7 +1107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const sortedLegacy = sortPrototypesByUsage(legacyPrototypes);
         bubbleManager.renderInitialPrototypes(sortedLegacy);
       } else {
-        bubbleManager.renderInitialPrototypes();
+        bubbleManager.renderInitialPrototypes(getDefaultPrototypesForUi());
       }
       // Show default title for legacy instances
       try {
@@ -965,12 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
           description: p.description || '',
         }));
       } catch {
-        seedList = [
-          { text: 'Task', color: '38bdf8', description: '' },
-          { text: 'Idea', color: 'a78bfa', description: '' },
-          { text: 'Bug', color: 'f87171', description: '' },
-          { text: 'Note', color: '10b981', description: '' },
-        ];
+        seedList = getDefaultPrototypeSeedForDb();
       }
       try {
         await savePrototypeSet(prototypeId, seedList);
@@ -996,7 +1154,7 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const existing = await loadInstance(compositeId);
       if (!existing) {
-        const defaultLabel = `Instance #${instanceNumber != null ? instanceNumber : ''}`.trim();
+        const defaultLabel = formatInstanceLabel(instanceNumber != null ? instanceNumber : '');
         await createInstance({ id: compositeId, prototypeId, instanceNumber, instanceLabel: defaultLabel });
       }
     } catch (e) {
@@ -1047,7 +1205,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const sortedPrototypes = sortPrototypesByUsage(sidebarPrototypes);
       bubbleManager.renderInitialPrototypes(sortedPrototypes);
     } else {
-      bubbleManager.renderInitialPrototypes();
+      bubbleManager.renderInitialPrototypes(getDefaultPrototypesForUi());
     }
 
     return { id: compositeId, prototypeId };
@@ -1159,10 +1317,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   } catch {}
 
-  let isEditMode = false;
-  let modalMode = 'create';
-  let editingEl = null;
-
   function openModal(mode = 'create', el = null) {
     if (!modal) return;
     if (mode === 'create') {
@@ -1171,7 +1325,7 @@ document.addEventListener('DOMContentLoaded', () => {
     modalMode = mode;
     editingEl = el;
     if (submitBtn) {
-      submitBtn.textContent = mode === 'create' ? 'Create Bubble' : 'Save';
+      submitBtn.textContent = mode === 'create' ? i18n.t('modalSubmitCreate') : i18n.t('modalSubmitSave');
     }
     modal.removeAttribute('hidden');
     form.reset();
@@ -1190,12 +1344,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const colorInput = document.querySelector(`input[name="bubbleColor"][value="${color}"]`);
         if (colorInput) colorInput.checked = true;
         // Prefill time input only when editing existing instance
-        if (bubbleTimeInput && mode === 'edit') {
+        if (mode === 'edit') {
           const ins = Number(el.getAttribute('data-inserted-at'));
           const ts = Number.isFinite(ins) ? ins : Date.now();
           const d = new Date(ts);
           const pad = (n) => String(n).padStart(2, '0');
-          bubbleTimeInput.value = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+          if (bubbleTimeHourInput) bubbleTimeHourInput.value = pad(d.getHours());
+          if (bubbleTimeMinuteInput) bubbleTimeMinuteInput.value = pad(d.getMinutes());
+          if (bubbleTimeSecondInput) bubbleTimeSecondInput.value = pad(d.getSeconds());
         }
       } catch {}
     }
@@ -1223,7 +1379,13 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   if (modal) {
+    modal.addEventListener('pointerdown', (event) => {
+      modalPointerStartedInside = !!event.target.closest('.dialog');
+    });
     modal.addEventListener('click', (event) => {
+      const startedInside = modalPointerStartedInside;
+      modalPointerStartedInside = false;
+      if (startedInside) return;
       if (event.target === modal || !event.target.closest('.dialog')) {
         closeModal();
       }
@@ -1286,14 +1448,14 @@ document.addEventListener('DOMContentLoaded', () => {
           try {
             const existing = Number(editingEl.getAttribute('data-inserted-at'));
             const base = Number.isFinite(existing) ? new Date(existing) : new Date();
-            const t = (bubbleTimeInput && bubbleTimeInput.value || '').trim();
-            if (t) {
-              const parts = t.split(':').map((s) => Number(s));
-              const hh = Number.isFinite(parts[0]) ? parts[0] : base.getHours();
-              const mm = Number.isFinite(parts[1]) ? parts[1] : base.getMinutes();
-              const ss = Number.isFinite(parts[2]) ? parts[2] : 0;
-              base.setHours(hh, mm, ss, 0);
-            }
+            const rawH = bubbleTimeHourInput ? Number(bubbleTimeHourInput.value) : NaN;
+            const rawM = bubbleTimeMinuteInput ? Number(bubbleTimeMinuteInput.value) : NaN;
+            const rawS = bubbleTimeSecondInput ? Number(bubbleTimeSecondInput.value) : NaN;
+            const hasCustom = Number.isFinite(rawH) || Number.isFinite(rawM) || Number.isFinite(rawS);
+            const hh = Number.isFinite(rawH) ? Math.min(23, Math.max(0, rawH)) : base.getHours();
+            const mm = Number.isFinite(rawM) ? Math.min(59, Math.max(0, rawM)) : base.getMinutes();
+            const ss = Number.isFinite(rawS) ? Math.min(59, Math.max(0, rawS)) : base.getSeconds();
+            if (hasCustom) base.setHours(hh, mm, ss, 0);
             insertedAtFinal = base.getTime();
             editingEl.setAttribute('data-inserted-at', String(insertedAtFinal));
             // Update visible time label
@@ -1305,7 +1467,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             let formattedTime = '';
             try {
-              const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+              const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
               formattedTime = formatter.format(base);
             } catch {
               const pad = (n) => String(n).padStart(2, '0');
@@ -1427,7 +1589,11 @@ document.addEventListener('DOMContentLoaded', () => {
     isEditMode = !!on;
     document.body.classList.toggle('edit-mode', isEditMode);
     try { editBtn.setAttribute('aria-pressed', isEditMode ? 'true' : 'false'); } catch {}
-    try { editBtn.textContent = isEditMode ? 'Done' : 'Edit'; } catch {}
+    try {
+      editBtn.textContent = isEditMode ? i18n.t('toolbarDone') : i18n.t('toolbarEdit');
+      editBtn.title = isEditMode ? i18n.t('toolbarDone') : i18n.t('toolbarEditTooltip');
+      editBtn.setAttribute('aria-label', i18n.t('toolbarEditTooltip'));
+    } catch {}
     dragController.setCanvasDragEnabled(!isEditMode);
     try { dragController.setEditMode(isEditMode); } catch {}
 
@@ -1438,7 +1604,7 @@ document.addEventListener('DOMContentLoaded', () => {
         titleInput.type = 'text';
         titleInput.id = 'instanceTitleInput';
         titleInput.className = 'toolbar-title-input';
-        titleInput.setAttribute('aria-label', 'Planner name');
+        titleInput.setAttribute('aria-label', i18n.t('toolbarNameAria'));
         toolbarTitleEl.parentNode.insertBefore(titleInput, toolbarTitleEl.nextSibling);
       }
       titleInput.value = toolbarTitleEl.textContent || '';
@@ -1451,7 +1617,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // and switch back to static text.
     if (!isEditMode && toolbarTitleEl && titleInput) {
       const newLabel = String(titleInput.value || '').trim();
-      const labelToUse = newLabel || (toolbarTitleEl.textContent || 'Weekly Planner');
+      const labelToUse = newLabel || (toolbarTitleEl.textContent || i18n.t('toolbarTitleDefault'));
       toolbarTitleEl.textContent = labelToUse;
       titleInput.style.display = 'none';
       toolbarTitleEl.style.display = '';

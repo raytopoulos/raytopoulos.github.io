@@ -30,14 +30,22 @@ export function createBubbleManager({
   dragController,
   refreshAccordionHeight,
   getCurrentAccordionIndex,
+  initialPrototypes = null,
 }) {
   let prototypeEditHandler = null;
-  const prototypes = [
-    { text: 'Task', color: '#38bdf8' },
-    { text: 'Idea', color: '#a78bfa' },
-    { text: 'Bug', color: '#f87171' },
-    { text: 'Note', color: '#10b981' },
-  ];
+  const prototypes = (Array.isArray(initialPrototypes) && initialPrototypes.length
+    ? initialPrototypes
+    : [
+        { text: 'Task', color: '#38bdf8' },
+        { text: 'Idea', color: '#a78bfa' },
+        { text: 'Bug', color: '#f87171' },
+        { text: 'Note', color: '#10b981' },
+      ])
+    .map((p) => ({
+      text: p.text || '',
+      color: p.color || '#38bdf8',
+      description: p.description || '',
+    }));
 
   function createPrototypeElement({ text, color, square = false, description = '' }) {
     const el = document.createElement('div');
@@ -122,7 +130,7 @@ export function createBubbleManager({
         timeSpan.className = 'bubble-time';
         let formattedTime = '';
         try {
-          const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const formatter = new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
           formattedTime = formatter.format(new Date(ts));
         } catch {
           const d = new Date(ts);

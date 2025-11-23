@@ -164,6 +164,7 @@
   </div>
 
   <script type="module">
+    import { i18n } from './i18n.js';
     import {
       PROTOTYPE_ID_LENGTH,
       createPrototypeSet,
@@ -173,18 +174,31 @@
 
     const appRootPath = new URL('.', window.location.href).pathname.replace(/\/+$/, '/') || '/';
     const LS_PROTOTYPE_KEY = 'organizer:prototypeId';
-    const DEFAULT_PROTOTYPE_SEED = [
-      { text: 'Task', color: '38bdf8', description: '' },
-      { text: 'Idea', color: 'a78bfa', description: '' },
-      { text: 'Bug', color: 'f87171', description: '' },
-      { text: 'Note', color: '10b981', description: '' },
-    ];
+    const errorStatusKeys = new Set([
+      'landingStatusRecreateError',
+      'landingStatusNoPrototype',
+      'landingStatusLoadError',
+      'landingStatusCreateFail',
+    ]);
+
+    const landingTitleEl = document.querySelector('.landing-title');
+    const landingSubtitleEl = document.querySelector('.landing-subtitle');
 
     const idInput = document.getElementById('idInput');
     const goBtn = document.getElementById('goBtn');
     const createBtn = document.getElementById('createBtn');
     const statusEl = document.getElementById('status');
     const instancesContainer = document.getElementById('instancesContainer');
+    let lastStatusKey = 'landingStatusWaiting';
+
+    function getDefaultPrototypeSeed() {
+      return [
+        { text: i18n.t('defaultPrototypeTask'), color: '38bdf8', description: '' },
+        { text: i18n.t('defaultPrototypeIdea'), color: 'a78bfa', description: '' },
+        { text: i18n.t('defaultPrototypeBug'), color: 'f87171', description: '' },
+        { text: i18n.t('defaultPrototypeNote'), color: '10b981', description: '' },
+      ];
+    }
 
     function getStoredPrototypeId() {
       try {
@@ -205,17 +219,44 @@
       }
     }
 
-    function setStatus(message) {
+    function setStatus(message, { isError = false } = {}) {
       if (!statusEl) return;
       statusEl.textContent = message;
       if (statusEl.classList) {
-        if (/^error:/i.test(String(message))) {
+        if (isError) {
           statusEl.classList.add('landing-status--error');
         } else {
           statusEl.classList.remove('landing-status--error');
         }
       }
     }
+
+    function setStatusKey(key, options = {}) {
+      lastStatusKey = key;
+      const isError = options.isError || errorStatusKeys.has(key);
+      setStatus(i18n.t(key), { isError });
+    }
+
+    function applyLandingCopy() {
+      document.title = i18n.t('pageTitleLanding');
+      if (landingTitleEl) landingTitleEl.textContent = i18n.t('landingTitle');
+      if (landingSubtitleEl) landingSubtitleEl.textContent = i18n.t('landingSubtitle');
+      if (idInput) {
+        idInput.placeholder = i18n.t('landingInputPlaceholder');
+        idInput.setAttribute('aria-label', i18n.t('landingInputLabel'));
+      }
+      if (goBtn) goBtn.textContent = i18n.t('landingOpen');
+      if (createBtn) createBtn.textContent = i18n.t('landingNew');
+      const emptyState = instancesContainer?.querySelector('.empty-state');
+      if (emptyState) emptyState.textContent = i18n.t('instanceEmpty');
+      if (statusEl && lastStatusKey) {
+        setStatusKey(lastStatusKey);
+      }
+    }
+    i18n.onChange(() => {
+      applyLandingCopy();
+    });
+    applyLandingCopy();
 
     function clearInstances() {
       if (instancesContainer) {
@@ -271,6 +312,10 @@
       return { prototypeId, instanceNumber: n };
     }
 
+    function formatInstanceLabel(n) {
+      return i18n.t('instanceLabelTemplate', { n });
+    }
+
     function getInstanceEntries(protoDoc) {
       if (!protoDoc || typeof protoDoc !== 'object') return [];
       const map = protoDoc.instances && typeof protoDoc.instances === 'object'
@@ -280,10 +325,10 @@
       for (const key of Object.keys(map)) {
         const n = Number.parseInt(key, 10);
         if (!Number.isFinite(n) || n < 0) continue;
-        const rawLabel = map[key];
-        const label = (typeof rawLabel === 'string' && rawLabel.trim())
-          ? rawLabel.trim()
-          : `Instance #${n}`;
+      const rawLabel = map[key];
+      const label = (typeof rawLabel === 'string' && rawLabel.trim())
+        ? rawLabel.trim()
+          : formatInstanceLabel(n);
         out.push({ number: n, label });
       }
       out.sort((a, b) => a.number - b.number);
@@ -313,7 +358,7 @@
       if (!entries.length) {
         const empty = document.createElement('div');
         empty.className = 'empty-state';
-        empty.textContent = 'No instances found for this prototype yet.';
+        empty.textContent = i18n.t('instanceEmpty');
         instancesContainer.appendChild(empty);
         return;
       }
@@ -351,7 +396,7 @@
       if (prototypeId) return prototypeId;
 
       try {
-        const created = await createPrototypeSet(DEFAULT_PROTOTYPE_SEED);
+        const created = await createPrototypeSet(getDefaultPrototypeSeed());
         prototypeId = created && created.id ? created.id : null;
         if (prototypeId) {
           setStoredPrototypeId(prototypeId);
@@ -377,7 +422,7 @@
         }
       }
       if (!label) {
-        label = `Instance #${nKey}`;
+        label = formatInstanceLabel(nKey);
       }
       await createInstance({ id: compositeId, prototypeId, instanceNumber: next, instanceLabel: label });
       return { compositeId, instanceNumber: next };
@@ -386,7 +431,7 @@
     async function handleId(rawId) {
       const id = String(rawId || '').trim();
       if (!id) {
-        setStatus('Waiting for an id. Provide a composite or prototype id, or create a new planner.');
+        setStatusKey('landingStatusWaiting');
         clearInstances();
         return;
       }
@@ -398,7 +443,7 @@
         return;
       }
 
-      setStatus('Looking up prototype…');
+      setStatusKey('landingStatusLooking');
       clearInstances();
 
       try {
@@ -409,7 +454,7 @@
             // Stored prototype id is invalid/missing; silently create a new one
             // and switch over without showing an error.
             try {
-              const created = await createPrototypeSet(DEFAULT_PROTOTYPE_SEED);
+              const created = await createPrototypeSet(getDefaultPrototypeSeed());
               const newId = created && created.id ? created.id : null;
               if (newId) {
                 setStoredPrototypeId(newId);
@@ -420,10 +465,10 @@
             } catch (e2) {
               console.warn('Failed to recreate missing stored prototype id', e2);
             }
-            setStatus('Error: could not recreate stored prototype. Please try again.');
+            setStatusKey('landingStatusRecreateError');
           } else {
             // User supplied an id that is not in local storage: show an explicit error.
-            setStatus('Error: no prototype found for this id.');
+            setStatusKey('landingStatusNoPrototype');
           }
           return;
         }
@@ -435,27 +480,22 @@
 
         const entries = getInstanceEntries(protoDoc);
         if (!entries.length) {
-          setStatus('Prototype found, but there are no instances yet. Create a new one below.');
+          setStatusKey('landingStatusProtoEmpty');
         } else {
-          setStatus('Prototype found. Choose an instance to open, or create another.');
+          setStatusKey('landingStatusProtoFound');
         }
         renderInstanceList(id, entries);
       } catch (e) {
         console.warn('Failed to load prototype', e);
-        setStatus('Something went wrong while loading this prototype.');
+        setStatusKey('landingStatusLoadError');
       }
     }
 
     async function handleCreateNew() {
-      setStatus('Creating a new prototype and its first instance…');
+      setStatusKey('landingStatusCreate');
       clearInstances();
 
-      const seedList = [
-        { text: 'Task', color: '38bdf8', description: '' },
-        { text: 'Idea', color: 'a78bfa', description: '' },
-        { text: 'Bug', color: 'f87171', description: '' },
-        { text: 'Note', color: '10b981', description: '' },
-      ];
+      const seedList = getDefaultPrototypeSeed();
 
       try {
         const created = await createPrototypeSet(seedList);
@@ -464,12 +504,12 @@
         window.location.href = `${appRootPath}edit/?id=${encodeURIComponent(compositeId)}`;
       } catch (e) {
         console.warn('Failed to create new instance', e);
-        setStatus('Could not create a new planner right now. Please try again.');
+        setStatusKey('landingStatusCreateFail');
       }
     }
 
     async function handleCreateNewWithStorage() {
-      setStatus('Creating a new prototype and its first instance...');
+      setStatusKey('landingStatusCreate');
       clearInstances();
 
       try {
@@ -478,14 +518,14 @@
           prototypeId = await ensurePrototypeId();
         }
         if (!prototypeId) {
-          setStatus('Could not create a new planner right now. Please try again.');
+          setStatusKey('landingStatusCreateFail');
           return;
         }
         const { compositeId } = await ensureInstanceForPrototype(prototypeId);
         window.location.href = `${appRootPath}edit/?id=${encodeURIComponent(compositeId)}`;
       } catch (e) {
         console.warn('Failed to create new instance', e);
-        setStatus('Could not create a new planner right now. Please try again.');
+        setStatusKey('landingStatusCreateFail');
       }
     }
 
@@ -527,7 +567,7 @@
             }
 
             // Stored prototype id is invalid/missing; create a new one and store it.
-            const created = await createPrototypeSet(DEFAULT_PROTOTYPE_SEED);
+            const created = await createPrototypeSet(getDefaultPrototypeSeed());
             const newId = created && created.id ? created.id : null;
             if (newId) {
               setStoredPrototypeId(newId);
@@ -535,13 +575,13 @@
               return;
             }
 
-            setStatus('Waiting for an id. Provide a composite or prototype id, or create a new planner.');
+            setStatusKey('landingStatusWaiting');
           } catch (e) {
             console.warn('Failed to resolve stored prototype id', e);
-            setStatus('Waiting for an id. Provide a composite or prototype id, or create a new planner.');
+            setStatusKey('landingStatusWaiting');
           }
         } else {
-          setStatus('Waiting for an id. Provide a composite or prototype id, or create a new planner.');
+          setStatusKey('landingStatusWaiting');
         }
       })();
     }
