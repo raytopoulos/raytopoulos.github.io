@@ -1329,6 +1329,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     modal.removeAttribute('hidden');
     form.reset();
+    // In edit modes, do not pre-select any color swatch; color only changes if user explicitly picks one.
+    if (mode === 'edit' || mode === 'edit-prototype') {
+      try {
+        const swatches = document.querySelectorAll('input[name="bubbleColor"]');
+        swatches.forEach((input) => { input.checked = false; });
+      } catch {}
+    }
     // Show time field only in edit mode
     if (bubbleTimeFormRow) {
       if (mode === 'edit') bubbleTimeFormRow.removeAttribute('hidden');
@@ -1337,12 +1344,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if ((mode === 'edit' || mode === 'edit-prototype') && el) {
       try {
         const txt = el.getAttribute('data-text') || '';
-        const color = el.getAttribute('data-color') || '#38bdf8';
         const desc = el.getAttribute('data-description') || '';
         if (bubbleTextInput) bubbleTextInput.value = txt;
         if (bubbleDescriptionInput) bubbleDescriptionInput.value = desc;
-        const colorInput = document.querySelector(`input[name="bubbleColor"][value="${color}"]`);
-        if (colorInput) colorInput.checked = true;
         // Prefill time input only when editing existing instance
         if (mode === 'edit') {
           const ins = Number(el.getAttribute('data-inserted-at'));
@@ -1400,6 +1404,28 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Allow toggling color swatches in edit modes:
+  // - No color is pre-selected when editing
+  // - Clicking a swatch selects it
+  // - Clicking the selected swatch again unselects it
+  if (colorGroup) {
+    colorGroup.addEventListener('click', (event) => {
+      // Only customize behavior for edit modes; creation keeps native radio behavior.
+      if (modalMode !== 'edit' && modalMode !== 'edit-prototype') return;
+      const label = event.target.closest('label[for]');
+      const inputFromLabel = label ? document.getElementById(label.getAttribute('for')) : null;
+      const input = inputFromLabel || event.target.closest('input[name="bubbleColor"]');
+      if (!input || input.name !== 'bubbleColor') return;
+      event.preventDefault();
+      const wasChecked = input.checked;
+      const all = colorGroup.querySelectorAll('input[name="bubbleColor"]');
+      all.forEach((el) => { el.checked = false; });
+      if (!wasChecked) {
+        input.checked = true;
+      }
+    });
+  }
+
   // Subtle bubble click animation (skip during drag)
   document.addEventListener('click', (e) => {
     const bubble = e.target && e.target.closest && e.target.closest('.bubble');
@@ -1419,7 +1445,13 @@ document.addEventListener('DOMContentLoaded', () => {
       event.preventDefault();
       const text = bubbleTextInput ? bubbleTextInput.value.trim() : '';
       const colorInput = document.querySelector('input[name="bubbleColor"]:checked');
-      const color = colorInput ? colorInput.value : '#38bdf8';
+      let color;
+      if (modalMode === 'edit' || modalMode === 'edit-prototype') {
+        const fallbackColor = editingEl ? (editingEl.getAttribute('data-color') || '#38bdf8') : '#38bdf8';
+        color = colorInput ? colorInput.value : fallbackColor;
+      } else {
+        color = colorInput ? colorInput.value : '#38bdf8';
+      }
       const description = bubbleDescriptionInput ? bubbleDescriptionInput.value.trim() : '';
 
       if (!text) return;
