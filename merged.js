@@ -1549,43 +1549,14 @@ document.addEventListener('DOMContentLoaded', () => {
             editingEl.style.color = isLight(color) ? 'var(--text)' : 'white';
           } catch {}
 
-          // Persist to DB (including updated time).
+          // Persist to DB (including updated time) by re-saving the entire day.
           (async () => {
-            const id = await ensureInstanceId();
             const flow = editingEl.closest('.day-flow');
             if (!flow) return;
-            const dayIndex = Number(flow.getAttribute('data-day-index'));
-            const dayName = dayIndexToName(dayIndex);
-            if (!dayName) return;
-            let childId = editingEl.getAttribute('data-id');
-            const pos = Array.from(flow.querySelectorAll('.bubble')).indexOf(editingEl);
-            const effectiveInsertedAt = Number.isFinite(Number(insertedAtFinal))
-              ? Number(insertedAtFinal)
-              : (() => {
-                  const attr = editingEl.getAttribute('data-inserted-at');
-                  const n = Number(attr);
-                  return Number.isFinite(n) ? n : undefined;
-                })();
-            if (!childId) {
-              // If this bubble was never persisted before, create it now.
-              const created = await pushDayItem(id, dayName, {
-                title: text,
-                color,
-                position: Math.max(0, pos),
-                insertedAt: effectiveInsertedAt,
-                description,
-              });
-              childId = created.id;
-              editingEl.setAttribute('data-id', childId);
-            } else {
-              await setDayItem(id, dayName, childId, {
-                title: text,
-                color,
-                position: Math.max(0, pos),
-                insertedAt: effectiveInsertedAt,
-                description,
-              });
-            }
+            const rawIndex = flow.getAttribute('data-day-index');
+            const dayIndex = Number(rawIndex);
+            if (!Number.isFinite(dayIndex)) return;
+            await persistDayPositions(dayIndex);
           })().catch((e) => console.warn('Failed to save edited bubble', e));
         } finally {
           closeModal();
