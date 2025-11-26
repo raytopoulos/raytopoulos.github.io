@@ -1425,7 +1425,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!text) return;
 
       if (modalMode === 'edit' && editingEl) {
-        // Update the bubble element
+        // Update the bubble element and persist edits (including time) to the DB.
+        let insertedAtFinal;
         try {
           editingEl.setAttribute('data-text', text);
           editingEl.setAttribute('data-color', color);
@@ -1444,18 +1445,22 @@ document.addEventListener('DOMContentLoaded', () => {
           }
           labelSpan.textContent = text;
           // Apply time change if provided
-          let insertedAtFinal;
           try {
-            const existing = Number(editingEl.getAttribute('data-inserted-at'));
-            const base = Number.isFinite(existing) ? new Date(existing) : new Date();
-            const rawH = bubbleTimeHourInput ? Number(bubbleTimeHourInput.value) : NaN;
-            const rawM = bubbleTimeMinuteInput ? Number(bubbleTimeMinuteInput.value) : NaN;
-            const rawS = bubbleTimeSecondInput ? Number(bubbleTimeSecondInput.value) : NaN;
-            const hasCustom = Number.isFinite(rawH) || Number.isFinite(rawM) || Number.isFinite(rawS);
-            const hh = Number.isFinite(rawH) ? Math.min(23, Math.max(0, rawH)) : base.getHours();
-            const mm = Number.isFinite(rawM) ? Math.min(59, Math.max(0, rawM)) : base.getMinutes();
-            const ss = Number.isFinite(rawS) ? Math.min(59, Math.max(0, rawS)) : base.getSeconds();
-            if (hasCustom) base.setHours(hh, mm, ss, 0);
+            const existingAttr = editingEl.getAttribute('data-inserted-at');
+            const existingNum = Number(existingAttr);
+            const base = Number.isFinite(existingNum) ? new Date(existingNum) : new Date();
+            const parseField = (input, min, max, fallback) => {
+              if (!input) return fallback;
+              const raw = String(input.value ?? '').trim();
+              if (!raw) return fallback;
+              const n = Number(raw);
+              if (!Number.isFinite(n)) return fallback;
+              return Math.min(max, Math.max(min, n));
+            };
+            const hh = parseField(bubbleTimeHourInput, 0, 23, base.getHours());
+            const mm = parseField(bubbleTimeMinuteInput, 0, 59, base.getMinutes());
+            const ss = parseField(bubbleTimeSecondInput, 0, 59, base.getSeconds());
+            base.setHours(hh, mm, ss, 0);
             insertedAtFinal = base.getTime();
             editingEl.setAttribute('data-inserted-at', String(insertedAtFinal));
             // Update visible time label
@@ -1474,7 +1479,14 @@ document.addEventListener('DOMContentLoaded', () => {
               formattedTime = `${pad(base.getHours())}:${pad(base.getMinutes())}:${pad(base.getSeconds())}`;
             }
             tsSpan.textContent = formattedTime;
-          } catch {}
+          } catch {
+            // If anything goes wrong, fall back to existing timestamp if present.
+            const existingAttr = editingEl.getAttribute('data-inserted-at');
+            const existingNum = Number(existingAttr);
+            if (Number.isFinite(existingNum)) {
+              insertedAtFinal = existingNum;
+            }
+          }
           // Reapply colors
           editingEl.style.backgroundColor = color;
           try {
@@ -1504,7 +1516,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editingEl.style.color = isLight(color) ? 'var(--text)' : 'white';
           } catch {}
 
-          // Persist to DB
+          // Persist to DB (including updated time).
           (async () => {
             const id = await ensureInstanceId();
             const flow = editingEl.closest('.day-flow');
@@ -1512,11 +1524,35 @@ document.addEventListener('DOMContentLoaded', () => {
             const dayIndex = Number(flow.getAttribute('data-day-index'));
             const dayName = dayIndexToName(dayIndex);
             if (!dayName) return;
-            const childId = editingEl.getAttribute('data-id');
+            let childId = editingEl.getAttribute('data-id');
             const pos = Array.from(flow.querySelectorAll('.bubble')).indexOf(editingEl);
-            const insertedAttr = editingEl.getAttribute('data-inserted-at');
-            const insertedAt = insertedAttr != null ? Number(insertedAttr) : undefined;
-            await setDayItem(id, dayName, childId, { title: text, color, position: Math.max(0, pos), insertedAt, description });
+            const effectiveInsertedAt = Number.isFinite(Number(insertedAtFinal))
+              ? Number(insertedAtFinal)
+              : (() => {
+                  const attr = editingEl.getAttribute('data-inserted-at');
+                  const n = Number(attr);
+                  return Number.isFinite(n) ? n : undefined;
+                })();
+            if (!childId) {
+              // If this bubble was never persisted before, create it now.
+              const created = await pushDayItem(id, dayName, {
+                title: text,
+                color,
+                position: Math.max(0, pos),
+                insertedAt: effectiveInsertedAt,
+                description,
+              });
+              childId = created.id;
+              editingEl.setAttribute('data-id', childId);
+            } else {
+              await setDayItem(id, dayName, childId, {
+                title: text,
+                color,
+                position: Math.max(0, pos),
+                insertedAt: effectiveInsertedAt,
+                description,
+              });
+            }
           })().catch((e) => console.warn('Failed to save edited bubble', e));
         } finally {
           closeModal();
