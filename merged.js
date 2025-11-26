@@ -1452,14 +1452,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const parseField = (input, min, max, fallback) => {
               if (!input) return fallback;
               const raw = String(input.value ?? '').trim();
-              if (!raw) return fallback;
+              if (raw === '') return fallback; // empty => use fallback (0 for our calls)
               const n = Number(raw);
               if (!Number.isFinite(n)) return fallback;
               return Math.min(max, Math.max(min, n));
             };
-            const hh = parseField(bubbleTimeHourInput, 0, 23, base.getHours());
-            const mm = parseField(bubbleTimeMinuteInput, 0, 59, base.getMinutes());
-            const ss = parseField(bubbleTimeSecondInput, 0, 59, base.getSeconds());
+            // Empty fields are treated as 0 (e.g. HH/MM/SS default to 00)
+            const hh = parseField(bubbleTimeHourInput, 0, 23, 0);
+            const mm = parseField(bubbleTimeMinuteInput, 0, 59, 0);
+            const ss = parseField(bubbleTimeSecondInput, 0, 59, 0);
             base.setHours(hh, mm, ss, 0);
             insertedAtFinal = base.getTime();
             editingEl.setAttribute('data-inserted-at', String(insertedAtFinal));
