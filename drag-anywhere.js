@@ -9,6 +9,11 @@ const defaults = {
   dragImage: null,
   dataText: 'drag-anywhere',
   addSyntheticTextFile: true,
+  // Touch-only: delay before beginning a drag (ms). Useful to avoid accidental drags on scrollable lists.
+  touchDelay: 500,
+  // If true, a move that crosses the threshold during the touchDelay starts the drag instead of canceling it.
+  startOnMoveDuringDelay: false,
+  moveStartThreshold: 5,
   // When true, do not create a mirror element.
   // Instead, temporarily move and position the original element itself.
   // Useful for cases where the UI should show the real element detaching
@@ -263,33 +268,38 @@ export function makeDraggable(el, options = {}) {
     const onPointerDown = (ev) => {
       if (ev.button && ev.button !== 0) return;
       // Do not preventDefault here so clicks can fire if no drag starts
-      
+
       // Clear any existing timer
       if (pointerDownTimer) {
         clearTimeout(pointerDownTimer);
       }
-      
+
       initialPointerId = ev.pointerId;
       const pos = getClientXY(ev);
       downPos = pos;
-      
+
       try {
-        // Capture the pointer immediately to prevent scrolling
+        // Capture the pointer immediately to prevent scrolling while we
+        // decide whether to start a drag.
         el.setPointerCapture && el.setPointerCapture(ev.pointerId);
         hasCapturedPointer = true;
       } catch {}
 
       // Desktop should start immediately; delay only on touch or in edit mode
       let isEditMode = false;
-      try { isEditMode = !!(document && document.body && document.body.classList && document.body.classList.contains('edit-mode')); } catch {}
+      try {
+        isEditMode = !!(document && document.body && document.body.classList && document.body.classList.contains('edit-mode'));
+      } catch {}
       const isTouch = ev.pointerType === 'touch';
       const shouldDelay = isTouch || isEditMode;
       if (shouldDelay) {
-        const delay = isTouch ? 500 : 200;
+        const delay = isTouch ? opts.touchDelay : 200;
         pointerDownTimer = setTimeout(() => {
-          if (hasCapturedPointer && initialPointerId === ev.pointerId) {
-            beginCommon(pos, 'pointer', ev);
-          }
+          if (!hasCapturedPointer || initialPointerId !== ev.pointerId) return;
+          // Drag is starting: clear the pending timer so moves
+          // no longer treat this as a "pre-drag" state.
+          pointerDownTimer = null;
+          beginCommon(pos, 'pointer', ev);
         }, delay);
       } else {
         beginCommon(pos, 'pointer', ev);
@@ -298,20 +308,25 @@ export function makeDraggable(el, options = {}) {
 
     const onPointerMove = (ev) => {
       if (pointerDownTimer) {
-        // If we haven't started dragging yet but moved significantly, cancel the timer
+        // If we haven't started dragging yet, decide whether to start or cancel based on movement
         const posNow = getClientXY(ev);
         const dx = (posNow.x - (downPos?.x || posNow.x));
         const dy = (posNow.y - (downPos?.y || posNow.y));
-        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        const overThreshold = Math.abs(dx) > opts.moveStartThreshold || Math.abs(dy) > opts.moveStartThreshold;
+        if (overThreshold) {
           clearTimeout(pointerDownTimer);
           pointerDownTimer = null;
-          if (hasCapturedPointer) {
-            try {
-              el.releasePointerCapture(ev.pointerId);
-              hasCapturedPointer = false;
-            } catch {}
+          if (opts.startOnMoveDuringDelay) {
+            beginCommon(posNow, 'pointer', ev);
+          } else {
+            if (hasCapturedPointer) {
+              try {
+                el.releasePointerCapture(ev.pointerId);
+                hasCapturedPointer = false;
+              } catch {}
+            }
+            return;
           }
-          return;
         }
       }
 

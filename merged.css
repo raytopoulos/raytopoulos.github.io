@@ -24,9 +24,12 @@
       border-right:1px solid var(--border);
       display:flex;
       flex-direction:column;
-      padding:16px;
+      padding:16px 0 16px 16px; /* No right padding so scrollbar can sit at edge */
       gap:16px;
       z-index:10;
+      height:100vh;
+      max-height:100vh;
+      box-sizing:border-box;
       transition:transform .3s ease, box-shadow .3s ease;
     }
     .sidebar header{
@@ -66,9 +69,14 @@
       display:flex;
       flex-direction:column;
       gap:12px;
-      flex-grow:1;
+      flex:1 1 auto;
+      min-height:0;
       overflow-y:auto;
-      padding-right:4px;
+      padding-right:16px; /* Keep content padded while scrollbar hugs sidebar edge */
+    }
+    .sidebar .bubbles-list .bubble{
+      /* Keep sidebar bubbles at natural height so list scrolls instead of squishing */
+      flex:0 0 auto;
     }
     .sidebar .add-btn{
       margin-top:auto;
@@ -248,10 +256,11 @@
       box-shadow:0 1px 3px rgba(0,0,0,.05);
       transition:opacity .2s, transform .2s, box-shadow .15s, filter .15s;
       width: 100%; /* Important for vertical stacking to fill container */
-      touch-action:none; /* Ensure pointer events during drag on mobile */
+      touch-action:none; /* Default: fully capture touch for robust drag */
       user-select:none;              /* Prevent text selection while initiating drag */
       -webkit-user-select:none;
       -webkit-user-drag:none;       /* Prevent native drag ghost on WebKit */
+      -webkit-touch-callout:none;   /* Suppress iOS text/callout menu */
       display:flex;
       flex-direction:column;
       align-items:center;
@@ -828,10 +837,15 @@
     /* Only on actual draggable (or its handle) so scrolling still works */
     .bubble,
     .bubble [data-drag-handle] {
+      /* Default: no native panning while dragging */
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
       -webkit-user-drag: none;
+    }
+    /* But in the sidebar, allow vertical panning on prototype bubbles so the list can scroll */
+    .sidebar .bubbles-list .bubble.prototype {
+      touch-action: pan-y;
     }
 
     /* Images/links can spawn native drags on Android */

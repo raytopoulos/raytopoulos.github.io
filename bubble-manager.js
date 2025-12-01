@@ -65,13 +65,7 @@ export function createBubbleManager({
     el.style.userSelect = 'none';
     el.style.webkitUserDrag = 'none';
 
-    // Prevent long-press context menu and native drag/copy
-    el.addEventListener('touchstart', (e) => {
-      // In edit mode, allow taps to become clicks for editing
-      if (!document.body.classList.contains('edit-mode')) {
-        e.preventDefault();
-      }
-    }, { passive: false });
+    // Prevent long-press context menu and native drag/copy without blocking scroll
     el.addEventListener('contextmenu', e => e.preventDefault());
 
     el.addEventListener('click', () => {

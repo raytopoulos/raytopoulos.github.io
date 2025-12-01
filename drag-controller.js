@@ -56,6 +56,7 @@ export function createDragController({
   let currentDrag = null;
   let activeDropTarget = null;
   const insertMarkerRef = { current: null };
+  let touchDragBlocker = null;
 
   const trash = trashZone || null;
 
@@ -133,6 +134,10 @@ export function createDragController({
 
   function cleanupDragState() {
     cleanupHoverTimer();
+    if (touchDragBlocker) {
+      try { window.removeEventListener('touchmove', touchDragBlocker); } catch {}
+      touchDragBlocker = null;
+    }
     if (!currentDrag) return;
     const sourceEl = currentDrag.sourceElement;
     if (sourceEl) {
@@ -142,6 +147,11 @@ export function createDragController({
           ? performance.now()
           : Date.now();
         sourceEl.__suppressClickUntil = now + 400;
+      }
+      if (currentDrag.lockTouchAction) {
+        try {
+          sourceEl.style.touchAction = currentDrag.prevTouchAction || '';
+        } catch {}
       }
     }
     setActiveDropTarget(null);
@@ -244,6 +254,13 @@ export function createDragController({
     const dayIndexAttr = parentFlow ? parentFlow.getAttribute('data-day-index') : null;
     const sourceDayIndex = dayIndexAttr != null ? Number(dayIndexAttr) : null;
     const isPrototype = el.classList.contains('prototype');
+    const pointerType = payload?.event?.pointerType || '';
+
+    const lockTouchAction = isPrototype && pointerType === 'touch';
+    const prevTouchAction = lockTouchAction ? el.style.touchAction : null;
+    if (lockTouchAction) {
+      el.style.touchAction = 'none';
+    }
 
     currentDrag = {
       sourceElement: el,
@@ -253,10 +270,21 @@ export function createDragController({
       origNextSibling: el.nextSibling,
       sourceDayIndex,
       anchor: null,
+      pointerType,
+      lockTouchAction,
+      prevTouchAction,
     };
 
     el.classList.add('dragging');
     try { document.body.classList.add('is-dragging'); } catch {}
+    if (isPrototype && pointerType === 'touch' && !touchDragBlocker) {
+      touchDragBlocker = (ev) => {
+        try {
+          if (ev.cancelable) ev.preventDefault();
+        } catch {}
+      };
+      window.addEventListener('touchmove', touchDragBlocker, { passive: false });
+    }
     if (trash) {
       trash.classList.add('trash-active');
     }
@@ -287,9 +315,13 @@ export function createDragController({
 
     registerRefreshIndex(currentDrag.sourceDayIndex);
 
-    let target = canceled ? null : getDropTargetAt(x, y);
+    let target = getDropTargetAt(x, y);
+    const allowCanceledPrototypeDrop = canceled
+      && currentDrag.sourceType === 'prototype'
+      && currentDrag.pointerType === 'touch';
+    const isCanceled = canceled && !allowCanceledPrototypeDrop;
 
-    if (!canceled && target && target.id === 'trash') {
+    if (!isCanceled && target && target.id === 'trash') {
       if (currentDrag.sourceType === 'day-flow' && currentDrag.sourceElement) {
         try {
           if (typeof deleteBubbleHandler === 'function') {
@@ -316,7 +348,7 @@ export function createDragController({
       return;
     }
 
-    if (!canceled && target && target.classList.contains('day-flow')) {
+    if (!isCanceled && target && target.classList.contains('day-flow')) {
       if (isEditMode && currentDrag.sourceType === 'prototype') {
         // Disallow prototype drops onto canvas in edit mode
         cleanupDragState();
@@ -374,7 +406,7 @@ export function createDragController({
     // If drag came from a day-flow and either was canceled or did not drop into
     // a valid day-flow/trash, restore the element back to its original spot.
     if (currentDrag.sourceType === 'day-flow') {
-      if (canceled || !target) {
+      if (isCanceled || !target) {
         restoreDetachedBubble();
       }
     }
@@ -395,6 +427,9 @@ export function createDragController({
       addSyntheticTextFile: true,
       dragCursor: 'grabbing',
       useNativeOnDesktop: false,
+      startOnMoveDuringDelay: isPrototype, // allow quick yank on prototypes without canceling
+      moveStartThreshold: 6,
+      touchDelay: isPrototype ? 220 : 500, // Faster start for prototypes on touch so sidebar close can't kill drag
       // For bubbles on the canvas (non-prototypes), drag the actual element
       // so it visibly detaches and no shadow element is shown.
       useOriginalAsMirror: !isPrototype,
