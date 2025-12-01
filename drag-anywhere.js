@@ -14,6 +14,8 @@ const defaults = {
   // If true, a move that crosses the threshold during the touchDelay starts the drag instead of canceling it.
   startOnMoveDuringDelay: false,
   moveStartThreshold: 5,
+  // If true, vertical movement during the delay cancels instead of starting a drag (lets lists scroll).
+  ignoreVerticalDuringDelay: false,
   // When true, do not create a mirror element.
   // Instead, temporarily move and position the original element itself.
   // Useful for cases where the UI should show the real element detaching
@@ -316,6 +318,15 @@ export function makeDraggable(el, options = {}) {
         if (overThreshold) {
           clearTimeout(pointerDownTimer);
           pointerDownTimer = null;
+          if (opts.ignoreVerticalDuringDelay && Math.abs(dy) > Math.abs(dx)) {
+            if (hasCapturedPointer) {
+              try {
+                el.releasePointerCapture(ev.pointerId);
+                hasCapturedPointer = false;
+              } catch {}
+            }
+            return;
+          }
           if (opts.startOnMoveDuringDelay) {
             beginCommon(posNow, 'pointer', ev);
           } else {

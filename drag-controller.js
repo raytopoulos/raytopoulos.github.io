@@ -429,6 +429,7 @@ export function createDragController({
       useNativeOnDesktop: false,
       startOnMoveDuringDelay: isPrototype, // allow quick yank on prototypes without canceling
       moveStartThreshold: 6,
+      ignoreVerticalDuringDelay: isPrototype, // let vertical flicks scroll sidebar instead of forcing drag
       touchDelay: isPrototype ? 220 : 500, // Faster start for prototypes on touch so sidebar close can't kill drag
       // For bubbles on the canvas (non-prototypes), drag the actual element
       // so it visibly detaches and no shadow element is shown.
