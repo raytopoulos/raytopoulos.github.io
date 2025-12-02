@@ -37,7 +37,12 @@ function ensureInsertMarker(insertMarkerElRef) {
 
 function getDropTargetAt(x, y) {
   const elBelow = document.elementFromPoint(x, y);
-  return elBelow ? elBelow.closest('.day-flow, #trash') : null;
+  const target = elBelow ? elBelow.closest('.day-flow, #trash') : null;
+  if (target && target.id === 'trash' && !target.classList.contains('trash-active')) {
+    // Ignore trash when it's not active/visible
+    return null;
+  }
+  return target;
 }
 
 export function createDragController({
@@ -285,7 +290,7 @@ export function createDragController({
       };
       window.addEventListener('touchmove', touchDragBlocker, { passive: false });
     }
-    if (trash) {
+    if (trash && (!isPrototype || isEditMode)) {
       trash.classList.add('trash-active');
     }
     if (isPrototype) {
