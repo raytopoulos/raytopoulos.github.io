@@ -107,6 +107,7 @@ export function makeDraggable(el, options = {}) {
     nativeEligible: opts.useNativeOnDesktop && preferNativeDnD(),
     active: false,
     source: 'pointer',
+    pointerId: null,
     startPos: null,
     lastPos: null,
     rect: null,
@@ -115,6 +116,8 @@ export function makeDraggable(el, options = {}) {
     // Track styles we temporarily override when using original as mirror
     _origInlineStyles: null,
     cleanupFns: [],
+    _touchFallbackAttached: false,
+    _touchFallbackHandlers: null,
   };
 
   function emit(cb, payload) {
@@ -181,6 +184,28 @@ export function makeDraggable(el, options = {}) {
 
     placeMirror(state.mirror, pos.x, pos.y);
     if (opts.dragCursor) el.style.cursor = opts.dragCursor;
+
+    // While dragging with touch/pencil, also listen to raw touch events as a fallback in case
+    // the browser emits a pointercancel (e.g., after a quick scroll/gesture).
+    if ((ev?.pointerType === 'touch' || ev?.pointerType === 'pen') && !state._touchFallbackAttached) {
+      const onTouchMoveFallback = (tev) => {
+        if (!state.active) return;
+        const t = (tev.touches && tev.touches[0]) || (tev.changedTouches && tev.changedTouches[0]);
+        if (!t) return;
+        moveCommon({ x: t.clientX, y: t.clientY }, tev);
+        if (tev.cancelable) tev.preventDefault();
+      };
+      const onTouchEndFallback = (tev) => {
+        if (!state.active) return;
+        endCommon(false, tev);
+        if (tev.cancelable) tev.preventDefault();
+      };
+      window.addEventListener('touchmove', onTouchMoveFallback, { passive: false });
+      window.addEventListener('touchend', onTouchEndFallback, { passive: false });
+      window.addEventListener('touchcancel', onTouchEndFallback, { passive: false });
+      state._touchFallbackHandlers = { onTouchMoveFallback, onTouchEndFallback };
+      state._touchFallbackAttached = true;
+    }
   }
 
   function moveCommon(pos, ev) {
@@ -192,6 +217,18 @@ export function makeDraggable(el, options = {}) {
   function endCommon(canceled, ev) {
     const last = state.lastPos || state.startPos || { x: 0, y: 0 };
     emit(opts.onDrop, { x: last.x, y: last.y, rect: state.rect, canceled: !!canceled, source: state.source, event: ev });
+    if (state.pointerId != null) {
+      try { el.releasePointerCapture(state.pointerId); } catch {}
+      state.pointerId = null;
+    }
+    if (state._touchFallbackAttached && state._touchFallbackHandlers) {
+      const { onTouchMoveFallback, onTouchEndFallback } = state._touchFallbackHandlers;
+      window.removeEventListener('touchmove', onTouchMoveFallback, { passive: false });
+      window.removeEventListener('touchend', onTouchEndFallback, { passive: false });
+      window.removeEventListener('touchcancel', onTouchEndFallback, { passive: false });
+      state._touchFallbackAttached = false;
+      state._touchFallbackHandlers = null;
+    }
     if (state.mirror && state.mirror.parentNode) {
       // If we used the original element as the mirror, don't remove it from the DOM.
       // Instead, restore its inline styles so it can be reinserted normally by the caller.
@@ -222,6 +259,7 @@ export function makeDraggable(el, options = {}) {
     state.rect = null;
     if (opts.dragCursor) el.style.removeProperty('cursor');
     state._origInlineStyles = null;
+    state._touchFallbackAttached = false;
   }
 
   function setupNative() {
@@ -269,7 +307,6 @@ export function makeDraggable(el, options = {}) {
     let downPos = null;
     const onPointerDown = (ev) => {
       if (ev.button && ev.button !== 0) return;
-      // Do not preventDefault here so clicks can fire if no drag starts
 
       // Clear any existing timer
       if (pointerDownTimer) {
@@ -285,7 +322,11 @@ export function makeDraggable(el, options = {}) {
         // decide whether to start a drag.
         el.setPointerCapture && el.setPointerCapture(ev.pointerId);
         hasCapturedPointer = true;
-      } catch {}
+        state.pointerId = ev.pointerId;
+      } catch {
+        hasCapturedPointer = false;
+        state.pointerId = null;
+      }
 
       // Desktop should start immediately; delay only on touch or in edit mode
       let isEditMode = false;
@@ -297,7 +338,7 @@ export function makeDraggable(el, options = {}) {
       if (shouldDelay) {
         const delay = isTouch ? opts.touchDelay : 200;
         pointerDownTimer = setTimeout(() => {
-          if (!hasCapturedPointer || initialPointerId !== ev.pointerId) return;
+          if (initialPointerId !== ev.pointerId) return;
           // Drag is starting: clear the pending timer so moves
           // no longer treat this as a "pre-drag" state.
           pointerDownTimer = null;
@@ -386,7 +427,13 @@ export function makeDraggable(el, options = {}) {
         return;
       }
 
-      endCommon(true, ev);
+      // For touch/pencil, keep the drag alive and let the touch fallback finish it.
+      if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
+        if (ev.cancelable) ev.preventDefault();
+        return;
+      }
+
+      endCommon(false, ev);
       try {
         el.releasePointerCapture(ev.pointerId);
         hasCapturedPointer = false;

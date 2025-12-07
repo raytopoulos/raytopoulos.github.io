@@ -96,6 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
       { text: i18n.t('defaultPrototypeIdea'), color: 'a78bfa', description: '' },
       { text: i18n.t('defaultPrototypeBug'), color: 'f87171', description: '' },
       { text: i18n.t('defaultPrototypeNote'), color: '10b981', description: '' },
+      { text: i18n.t('defaultPrototypeInput'), color: '0ea5e9', description: '' },
+      { text: i18n.t('defaultPrototypeOutput'), color: '22c55e', description: '' },
     ];
   }
 

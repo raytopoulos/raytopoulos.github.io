@@ -62,10 +62,33 @@ export function createDragController({
   let activeDropTarget = null;
   const insertMarkerRef = { current: null };
   let touchDragBlocker = null;
+  let globalTouchLockActive = false;
+  let prevBodyTouchAction = null;
+  let prevDocTouchAction = null;
 
   const trash = trashZone || null;
 
   const registerRefresh = new Set();
+
+  function lockGlobalTouchAction() {
+    if (globalTouchLockActive) return;
+    try {
+      prevBodyTouchAction = document.body.style.touchAction;
+      prevDocTouchAction = document.documentElement.style.touchAction;
+      document.body.style.touchAction = 'none';
+      document.documentElement.style.touchAction = 'none';
+      globalTouchLockActive = true;
+    } catch {}
+  }
+
+  function unlockGlobalTouchAction() {
+    if (!globalTouchLockActive) return;
+    globalTouchLockActive = false;
+    try { document.body.style.touchAction = prevBodyTouchAction || ''; } catch {}
+    try { document.documentElement.style.touchAction = prevDocTouchAction || ''; } catch {}
+    prevBodyTouchAction = null;
+    prevDocTouchAction = null;
+  }
 
   function setActiveDropTarget(target) {
     if (activeDropTarget && activeDropTarget !== target) {
@@ -143,6 +166,7 @@ export function createDragController({
       try { window.removeEventListener('touchmove', touchDragBlocker); } catch {}
       touchDragBlocker = null;
     }
+    unlockGlobalTouchAction();
     if (!currentDrag) return;
     const sourceEl = currentDrag.sourceElement;
     if (sourceEl) {
@@ -255,13 +279,17 @@ export function createDragController({
       color: el.getAttribute('data-color') || el.style.backgroundColor || '#38bdf8',
       description: el.getAttribute('data-description') || '',
     };
+    const pointerTypeRaw = payload?.event?.pointerType || '';
+    const pointerType = pointerTypeRaw
+      ? String(pointerTypeRaw).toLowerCase()
+      : (payload?.event?.type && payload.event.type.startsWith('touch') ? 'touch' : '');
+    const isTouchLikePointer = pointerType === 'touch' || pointerType === 'pen' || (!pointerType && payload?.event?.type && payload.event.type.startsWith('touch'));
     const parentFlow = el.closest('.day-flow');
     const dayIndexAttr = parentFlow ? parentFlow.getAttribute('data-day-index') : null;
     const sourceDayIndex = dayIndexAttr != null ? Number(dayIndexAttr) : null;
     const isPrototype = el.classList.contains('prototype');
-    const pointerType = payload?.event?.pointerType || '';
 
-    const lockTouchAction = isPrototype && pointerType === 'touch';
+    const lockTouchAction = isPrototype;
     const prevTouchAction = lockTouchAction ? el.style.touchAction : null;
     if (lockTouchAction) {
       el.style.touchAction = 'none';
@@ -276,13 +304,17 @@ export function createDragController({
       sourceDayIndex,
       anchor: null,
       pointerType,
+      isTouchLikePointer,
       lockTouchAction,
       prevTouchAction,
     };
 
     el.classList.add('dragging');
     try { document.body.classList.add('is-dragging'); } catch {}
-    if (isPrototype && pointerType === 'touch' && !touchDragBlocker) {
+    if (isTouchLikePointer) {
+      lockGlobalTouchAction();
+    }
+    if (isTouchLikePointer && !touchDragBlocker) {
       touchDragBlocker = (ev) => {
         try {
           if (ev.cancelable) ev.preventDefault();
@@ -323,7 +355,7 @@ export function createDragController({
     let target = getDropTargetAt(x, y);
     const allowCanceledPrototypeDrop = canceled
       && currentDrag.sourceType === 'prototype'
-      && currentDrag.pointerType === 'touch';
+      && currentDrag.isTouchLikePointer;
     const isCanceled = canceled && !allowCanceledPrototypeDrop;
 
     if (!isCanceled && target && target.id === 'trash') {
@@ -434,7 +466,7 @@ export function createDragController({
       useNativeOnDesktop: false,
       startOnMoveDuringDelay: isPrototype, // allow quick yank on prototypes without canceling
       moveStartThreshold: 6,
-      ignoreVerticalDuringDelay: isPrototype, // let vertical flicks scroll sidebar instead of forcing drag
+      ignoreVerticalDuringDelay: isPrototype, // still let quick vertical flicks scroll the sidebar
       touchDelay: isPrototype ? 220 : 500, // Faster start for prototypes on touch so sidebar close can't kill drag
       // For bubbles on the canvas (non-prototypes), drag the actual element
       // so it visibly detaches and no shadow element is shown.
