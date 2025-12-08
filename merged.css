@@ -6,7 +6,7 @@
     }
     *{ box-sizing:border-box; }
     /* let the document grow */
-    html,body{ min-height:100%; }
+    html,body{ min-height:100%; overscroll-behavior-y:none; }
     /* SOLID body background (no gradients) */
     body{
       margin:0;
