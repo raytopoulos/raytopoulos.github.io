@@ -26,6 +26,16 @@
       gap: 12px;
       margin-bottom: 20px;
     }
+    .landing-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .landing-logo {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+    }
     .landing-title {
       font-size: clamp(1.5rem, 4vw, 2.25rem);
       margin: 0;
@@ -128,6 +138,10 @@
         padding: 18px 16px 22px;
         border-radius: 18px;
       }
+      .landing-logo {
+        width: 32px;
+        height: 32px;
+      }
     }
   </style>
 </head>
@@ -135,11 +149,14 @@
   <div class="landing-shell">
     <section class="landing-card" aria-live="polite">
       <header class="landing-header">
-        <div>
-          <h1 class="landing-title">Bubble Organizer</h1>
-          <p class="landing-subtitle">
-            Jump into an existing planner by id, or create a new prototype and its first instance.
-          </p>
+        <div class="landing-brand">
+          <img src="./logo-bubble-organizer.svg" alt="" class="landing-logo" aria-hidden="true" />
+          <div>
+            <h1 class="landing-title">Bubble Organizer</h1>
+            <p class="landing-subtitle">
+              Jump into an existing planner by id, or create a new prototype and its first instance.
+            </p>
+          </div>
         </div>
       </header>
 
