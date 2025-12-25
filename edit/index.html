@@ -18,7 +18,14 @@
         <span class="sidebar-title-text">Bubble Library</span>
         <button id="closeSidebar" class="close-btn" aria-label="Close library" title="Close">&times;</button>
       </header>
-      <div class="hint">Drag a bubble onto the canvas to create an instance.</div>
+      <div class="bubble-search" role="search" aria-label="Search bubbles">
+        <label class="sr-only" for="bubbleSearch">Search bubbles</label>
+        <div class="search-row">
+          <input id="bubbleSearch" class="search-input" type="search" placeholder="Search bubbles..." autocomplete="off" />
+          <button id="bubbleSearchClear" class="search-clear" type="button" aria-label="Clear search" hidden>&times;</button>
+        </div>
+        <div id="bubbleSearchStatus" class="search-status" aria-live="polite"></div>
+      </div>
 
       <div id="templates" class="bubbles-list" aria-live="polite"></div>
 

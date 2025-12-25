@@ -44,6 +44,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const addBtn = document.getElementById('addBtn');
   const editBtn = document.getElementById('editBtn');
   const templates = document.getElementById('templates') || document.querySelector('.bubbles-list');
+  const bubbleSearchInput = document.getElementById('bubbleSearch');
+  const bubbleSearchClearBtn = document.getElementById('bubbleSearchClear');
+  const bubbleSearchStatus = document.getElementById('bubbleSearchStatus');
   const dayFlows = document.querySelectorAll('.day-flow');
   const trashZone = document.getElementById('trash');
   const dayAccordionHeaders = document.querySelectorAll('.day-accordion__header');
@@ -75,6 +78,73 @@ document.addEventListener('DOMContentLoaded', () => {
     toolbarTitleEl.dataset.defaultTitle = i18n.t('toolbarTitleDefault');
     if (!toolbarTitleEl.textContent || toolbarTitleEl.textContent === 'Weekly Planner') {
       toolbarTitleEl.textContent = i18n.t('toolbarTitleDefault');
+    }
+  }
+
+  let currentBubbleSearchQuery = '';
+
+  function tokenizeSearchQuery(raw) {
+    return String(raw || '')
+      .toLowerCase()
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+
+  function bubbleMatchesSearch(el, tokens) {
+    if (!el) return false;
+    if (!tokens || !tokens.length) return true;
+    const text = [
+      el.getAttribute && el.getAttribute('data-text'),
+      el.getAttribute && el.getAttribute('data-description'),
+      el.textContent,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+    return tokens.every((t) => text.includes(t));
+  }
+
+  function applyBubbleSearch(rawQuery) {
+    currentBubbleSearchQuery = String(rawQuery || '');
+    const tokens = tokenizeSearchQuery(currentBubbleSearchQuery);
+    const hasQuery = tokens.length > 0;
+
+    if (bubbleSearchClearBtn) {
+      bubbleSearchClearBtn.hidden = !hasQuery;
+    }
+
+    let libraryMatches = 0;
+    let canvasMatches = 0;
+
+    if (templates) {
+      const prototypeNodes = templates.querySelectorAll('.bubble');
+      prototypeNodes.forEach((el) => {
+        const matched = bubbleMatchesSearch(el, tokens);
+        el.classList.toggle('search-hidden', hasQuery && !matched);
+        if (matched) libraryMatches += 1;
+      });
+    }
+
+    const canvasNodes = document.querySelectorAll('.day-flow .bubble');
+    canvasNodes.forEach((el) => {
+      const matched = bubbleMatchesSearch(el, tokens);
+      el.classList.toggle('search-match', hasQuery && matched);
+      el.classList.toggle('search-dim', hasQuery && !matched);
+      if (matched) canvasMatches += 1;
+    });
+
+    if (bubbleSearchStatus) {
+      if (!hasQuery) {
+        bubbleSearchStatus.textContent = '';
+      } else if (!libraryMatches && !canvasMatches) {
+        bubbleSearchStatus.textContent = 'No matches';
+      } else {
+        const parts = [];
+        if (templates) parts.push(`${libraryMatches} in library`);
+        parts.push(`${canvasMatches} on canvas`);
+        bubbleSearchStatus.textContent = parts.join(' | ');
+      }
     }
   }
 
@@ -947,6 +1017,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (backdrop) {
     backdrop.addEventListener('click', () => toggleSidebar(false));
+  }
+
+  if (bubbleSearchInput) {
+    bubbleSearchInput.addEventListener('input', () => applyBubbleSearch(bubbleSearchInput.value));
+    bubbleSearchInput.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        bubbleSearchInput.value = '';
+        applyBubbleSearch('');
+        try { bubbleSearchInput.blur(); } catch {}
+      }
+    });
+  }
+
+  if (bubbleSearchClearBtn && bubbleSearchInput) {
+    bubbleSearchClearBtn.addEventListener('click', () => {
+      bubbleSearchInput.value = '';
+      applyBubbleSearch('');
+      try { bubbleSearchInput.focus(); } catch {}
+    });
+  }
+
+  if (templates && bubbleSearchInput) {
+    try {
+      const observer = new MutationObserver(() => {
+        if (!bubbleSearchInput) return;
+        if (!currentBubbleSearchQuery) return;
+        applyBubbleSearch(bubbleSearchInput.value);
+      });
+      observer.observe(templates, { childList: true, subtree: true });
+    } catch {}
+  }
+
+  if (bubbleSearchInput && dayFlows && dayFlows.length) {
+    try {
+      const observer = new MutationObserver(() => {
+        if (!bubbleSearchInput) return;
+        if (!currentBubbleSearchQuery) return;
+        applyBubbleSearch(bubbleSearchInput.value);
+      });
+      dayFlows.forEach((flow) => observer.observe(flow, { childList: true, subtree: true }));
+    } catch {}
   }
 
   const accordion = createAccordionController(dayAccordionHeaders);
