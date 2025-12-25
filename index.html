@@ -107,8 +107,9 @@
       padding: 12px 14px;
       cursor: pointer;
       display: flex;
-      flex-direction: column;
-      gap: 4px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
       transition: box-shadow 150ms ease, transform 150ms ease, border-color 150ms ease;
     }
     .instance-card:hover {
@@ -120,9 +121,30 @@
       font-weight: 600;
       font-size: 0.95rem;
     }
+    .instance-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      flex: 1 1 auto;
+    }
     .instance-meta {
       font-size: 0.82rem;
       color: var(--muted, #64748b);
+    }
+    .instance-actions {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .instance-action-link {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--accent, #22d3ee);
+      text-decoration: none;
+    }
+    .instance-action-link:hover {
+      text-decoration: underline;
     }
     .empty-state {
       margin-top: 6px;
@@ -385,11 +407,19 @@
 
       entries.forEach(({ number: n, label }) => {
         const compositeId = `${prototypeId}${n}`;
-        const card = document.createElement('button');
-        card.type = 'button';
+        const card = document.createElement('div');
         card.className = 'instance-card';
-        card.addEventListener('click', () => {
+        card.tabIndex = 0;
+        card.setAttribute('role', 'button');
+        card.addEventListener('click', (e) => {
+          if (e.defaultPrevented) return;
           window.location.href = `${appRootPath}edit/?id=${encodeURIComponent(compositeId)}`;
+        });
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            window.location.href = `${appRootPath}edit/?id=${encodeURIComponent(compositeId)}`;
+          }
         });
 
         const title = document.createElement('div');
@@ -400,8 +430,24 @@
         meta.className = 'instance-meta';
         meta.textContent = compositeId;
 
-        card.appendChild(title);
-        card.appendChild(meta);
+        const info = document.createElement('div');
+        info.className = 'instance-info';
+        info.appendChild(title);
+        info.appendChild(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'instance-actions';
+
+        const viewLink = document.createElement('a');
+        viewLink.className = 'instance-action-link';
+        viewLink.href = `${appRootPath}view/?id=${encodeURIComponent(compositeId)}`;
+        viewLink.textContent = 'View';
+        viewLink.addEventListener('click', (e) => e.stopPropagation());
+
+        actions.appendChild(viewLink);
+
+        card.appendChild(info);
+        card.appendChild(actions);
         grid.appendChild(card);
       });
 
