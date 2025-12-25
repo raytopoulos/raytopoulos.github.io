@@ -239,7 +239,7 @@
   </div>
 
   <script type="module">
-    import { loadInstance, DAYS } from '../instances.js';
+    import { loadInstance, loadPrototypeSet, DAYS } from '../instances.js';
     import { i18n } from '../i18n.js';
 
     const statusEl = document.getElementById('status');
@@ -253,6 +253,7 @@
     let lastStatusKey = 'viewStatusWaiting';
     let lastStatusVariant = 'info';
     let lastStatusVars = {};
+    let viewTitleOverride = '';
 
     function dayLabels() {
       return {
@@ -287,7 +288,7 @@
 
     function applyCopy() {
       document.title = i18n.t('pageTitleView');
-      if (viewTitleEl) viewTitleEl.textContent = i18n.t('viewTitle');
+      if (viewTitleEl) viewTitleEl.textContent = viewTitleOverride || i18n.t('viewTitle');
       buildHeadRow();
       if (!hasRenderedRows && !instanceId) {
         clearTable(i18n.t('viewEmptyPrompt'));
@@ -331,6 +332,8 @@
           clearTable(i18n.t('viewTableNoData'));
           return;
         }
+        viewTitleOverride = await resolveInstanceTitle(snap);
+        applyCopy();
         const rows = groupByTimestamp(snap.days);
         if (!rows.length) {
           setStatusKey('viewStatusNoBubbles', 'info');
@@ -346,6 +349,30 @@
       }
     }
 
+    async function resolveInstanceTitle(snap) {
+      if (!snap || typeof snap !== 'object') return '';
+
+      const prototypeId = typeof snap.prototypeId === 'string' ? snap.prototypeId.trim() : '';
+      const instanceNumber = Number(snap.instanceNumber);
+      if (prototypeId && Number.isFinite(instanceNumber) && instanceNumber >= 0) {
+        try {
+          const protoDoc = await loadPrototypeSet(prototypeId);
+          const rawLabel = protoDoc && protoDoc.instances && protoDoc.instances[String(instanceNumber)];
+          const label = (typeof rawLabel === 'string' && rawLabel.trim()) ? rawLabel.trim() : '';
+          if (label) return label;
+        } catch {
+          // Ignore title lookup failures; fall back to instance document.
+        }
+      }
+
+      const rawInstanceLabel = snap.instanceLabel;
+      if (typeof rawInstanceLabel === 'string' && rawInstanceLabel.trim()) {
+        return rawInstanceLabel.trim();
+      }
+
+      return '';
+    }
+
     function groupByTimestamp(days) {
       const rowMap = new Map();
 
@@ -357,6 +384,8 @@
           if (!row) {
             row = { key: meta.key, label: meta.label, sortValue: meta.sortValue, perDay: new Map() };
             rowMap.set(meta.key, row);
+          } else if (meta.sortValue < row.sortValue) {
+            row.sortValue = meta.sortValue;
           }
           if (!row.perDay.has(day)) {
             row.perDay.set(day, []);
@@ -401,11 +430,21 @@
         const d = new Date(inserted);
         const hh = String(d.getHours()).padStart(2, '0');
         const mm = String(d.getMinutes()).padStart(2, '0');
-        const ss = String(d.getSeconds()).padStart(2, '0');
-        // Display resolution: HH:MM, but keep seconds in sort key so earliest wins.
+        const minutes = d.getMinutes();
+        const seconds = d.getSeconds();
+
+        // Group tiles from HH:00 through HH:30 (inclusive) under HH:00.
+        // Everything else is grouped by exact minute (HH:MM).
+        const withinHalfHourAfterHour = minutes <= 30;
+        if (withinHalfHourAfterHour) {
+          const label = `${hh}:00`;
+          const sortValue = d.getHours() * 3600;
+          return { key: label, label, sortValue };
+        }
+
         const label = `${hh}:${mm}`;
-        const sortValue = d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
-        return { key: `${hh}:${mm}:${ss}`, label, sortValue };
+        const sortValue = d.getHours() * 3600 + minutes * 60 + seconds;
+        return { key: label, label, sortValue };
       }
       return { key: '__no_time__', label: i18n.t('viewNoTime'), sortValue: Number.POSITIVE_INFINITY };
     }
