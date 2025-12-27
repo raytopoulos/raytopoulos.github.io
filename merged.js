@@ -1004,6 +1004,11 @@ document.addEventListener('DOMContentLoaded', () => {
       sidebar.classList.remove('open');
       backdrop.classList.remove('open');
       menuBtn.setAttribute('aria-expanded', 'false');
+      // On mobile, clear search when closing the sidebar.
+      if (window.innerWidth <= 768 && bubbleSearchInput) {
+        bubbleSearchInput.value = '';
+        applyBubbleSearch('');
+      }
     }
   }
 
